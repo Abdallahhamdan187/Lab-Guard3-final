@@ -1,0 +1,345 @@
+import { Package, AlertCircle, Wrench, CheckCircle, MapPin, Search, Plus } from "lucide-react";
+import { StatCard } from "@/components/shared/StatCard";
+import { mockEquipment } from "@/data/mockData";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { toast } from "sonner";
+import {useEffect, useState} from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { AddEquipmentModal } from "@/components/shared/AddEquipmentModal";
+import api from "@/api.js";
+
+export function LabAssistantDashboard() {
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedEquipment, setSelectedEquipment] = useState(null);
+  const [maintenanceNotes, setMaintenanceNotes] = useState("");
+  const [newStatus, setNewStatus] = useState("");
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [stats, setStats] = useState(null);
+  const [equipment, setEquipment] = useState([]);
+  const fetchStats = async () =>{
+    try{
+      const res = await api.get("/dashboard/lab-assistant")
+      setStats(res.data)
+    }catch (err) {
+      console.log("Lab Assistant Stats Error",err)
+    }
+  }
+  const fetchEquipment = async () =>{
+    try{
+      const res = await api.get("/equipment")
+      setEquipment(res.data)
+    }catch (err) {
+      console.log("Lab Assistant Equipment Error",err)
+    }
+  }
+  useEffect(()=>{
+    fetchStats()
+    fetchEquipment()
+  },[])
+
+  const totalEquipment = stats?.totalEquipment || 0;
+  const availableCount = stats?.available || 0;
+  const maintenanceCount = stats?.maintenance || 0;
+  const inUseCount = stats?.inUse || 0
+
+  const filteredEquipment = equipment.filter(e =>
+    e.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    e.location.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    e.serialNumber.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const handleUpdateStatus = async () => {
+    if (!newStatus) {
+      toast.error("Please select a status");
+      return;
+    }
+    try {
+      await api.patch("/equipment/update", {
+        id: selectedEquipment.id,
+        status: newStatus
+      })
+      await fetchStats()
+      await fetchEquipment()
+      toast.success(`Equipment status updated to ${newStatus}`);
+    }catch (err) {
+      console.log("Update Status Error",err)
+    }finally {
+      setSelectedEquipment(null);
+      setMaintenanceNotes("");
+      setNewStatus("");
+    }
+  };
+
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'Available':
+        return 'text-green-600 bg-green-100';
+      case 'In Use':
+        return 'text-blue-600 bg-blue-100';
+      case 'Maintenance':
+        return 'text-orange-600 bg-orange-100';
+      case 'Reserved':
+        return 'text-purple-600 bg-purple-100';
+      default:
+        return 'text-gray-600 bg-gray-100';
+    }
+  };
+
+  return (
+    <div className="p-6 space-y-6 bg-gray-50 min-h-screen">
+      {/* Add Equipment Modal */}
+      <AddEquipmentModal
+        open={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        onAdd={newEq => setEquipment(prev => [newEq, ...prev])}
+      />
+
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Lab Assistant Dashboard</h1>
+          <p className="text-gray-600 mt-1">Monitor and manage laboratory equipment inventory</p>
+        </div>
+        <Button
+          onClick={() => setShowAddModal(true)}
+          className="flex items-center gap-2 bg-[#e9333f] hover:bg-[#d12233] text-white"
+        >
+          <Plus size={16} /> Add Equipment
+        </Button>
+      </div>
+
+      {/* Statistics */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <StatCard
+          title="Total Equipment"
+          value={totalEquipment}
+          icon={Package}
+          color="#3498db"
+        />
+        <StatCard
+          title="Available"
+          value={availableCount}
+          icon={CheckCircle}
+          color="#27ae60"
+          trend={{ value: "8%", isPositive: true }}
+        />
+        <StatCard
+          title="In Maintenance"
+          value={maintenanceCount}
+          icon={Wrench}
+          color="#f39c12"
+        />
+        <StatCard
+          title="Currently in Use"
+          value={inUseCount}
+          icon={AlertCircle}
+          color="#e9333f"
+        />
+      </div>
+
+      {/* Equipment Inventory */}
+      <div className="bg-white rounded-lg shadow-md border border-gray-200">
+        <div className="p-6 border-b border-gray-200">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <h3 className="text-lg font-semibold text-gray-900">Equipment Inventory</h3>
+            <div className="relative w-full md:w-96">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+              <Input
+                type="text"
+                placeholder="Search by name, location, or serial number..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-gray-50">
+                <TableHead>Equipment</TableHead>
+                <TableHead>Serial Number</TableHead>
+                <TableHead>Location</TableHead>
+                <TableHead>Quantity</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredEquipment.map((equipment) => (
+                <TableRow key={equipment.id} className="hover:bg-gray-50">
+                  <TableCell>
+                    <div className="flex items-center gap-3">
+                      <img
+                        src={equipment.imageUrl}
+                        alt={equipment.name}
+                        className="w-12 h-12 object-cover rounded-lg"
+                      />
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">{equipment.name}</p>
+                        <p className="text-xs text-gray-500">{equipment.category}</p>
+                      </div>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <p className="text-sm font-mono text-gray-600">{equipment.serialNumber}</p>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1 text-sm text-gray-600">
+                      <MapPin size={14} className="text-gray-400" />
+                      {equipment.location}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="text-sm">
+                      <span className="font-medium text-gray-900">{equipment.availableQuantity}</span>
+                      <span className="text-gray-500"> / {equipment.totalQuantity}</span>
+                    </div>
+                    <div className="w-24 bg-gray-200 rounded-full h-1.5 mt-1">
+                      <div
+                        className="bg-[#e9333f] h-1.5 rounded-full"
+                        style={{ width: `${(equipment.availableQuantity / equipment.totalQuantity) * 100}%` }}
+                      />
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <Badge className={getStatusColor(equipment.status)}>
+                      {equipment.status}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setSelectedEquipment(equipment);
+                        setNewStatus(equipment.status);
+                      }}
+                      className="text-[#e9333f] border-[#e9333f] hover:bg-[#e9333f] hover:text-white"
+                    >
+                      Update Status
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      </div>
+
+      {/* Location Overview */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="bg-white rounded-lg shadow-md border border-gray-200 p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Equipment by Location</h3>
+          <div className="space-y-3">
+            {
+              stats?.labs?.map((lab) => {
+                return (
+                    <div key={lab.name} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <MapPin size={16} className="text-gray-400" />
+                        <span className="text-sm font-medium text-gray-900">{lab.name}</span>
+                      </div>
+                      <Badge variant="outline">{lab.equipment_count} items</Badge>
+                    </div>
+                );
+              })}
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg shadow-md border border-gray-200 p-6">
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Maintenance Required</h3>
+          <div className="space-y-3">
+            {equipment.filter(e => e.status === 'Maintenance').map((eq) => (
+              <div key={eq.id} className="p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">{eq.name}</p>
+                    <p className="text-xs text-gray-500 mt-1">{eq.location}</p>
+                  </div>
+                  <Wrench size={16} className="text-orange-600" />
+                </div>
+              </div>
+            ))}
+            {equipment.filter(e => e.status === 'Maintenance').length === 0 && (
+              <div className="text-center py-8 text-gray-500">
+                <CheckCircle className="mx-auto mb-2 text-gray-400" size={32} />
+                <p className="text-sm">All equipment in good condition</p>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Update Status Dialog */}
+      <Dialog open={!!selectedEquipment} onOpenChange={() => setSelectedEquipment(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Update Equipment Status</DialogTitle>
+            <DialogDescription>
+              Change the status and add notes for {selectedEquipment?.name}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Equipment</Label>
+              <p className="text-sm font-medium">{selectedEquipment?.name}</p>
+              <p className="text-xs text-gray-500">{selectedEquipment?.serialNumber}</p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="status">New Status</Label>
+              <Select value={newStatus} onValueChange={setNewStatus}>
+                <SelectTrigger id="status">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Available">Available</SelectItem>
+                  <SelectItem value="In Use">In Use</SelectItem>
+                  <SelectItem value="Maintenance">Maintenance</SelectItem>
+                  <SelectItem value="Reserved">Reserved</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="notes">Notes</Label>
+              <Textarea
+                id="notes"
+                placeholder="Add any notes about the status change..."
+                value={maintenanceNotes}
+                onChange={(e) => setMaintenanceNotes(e.target.value)}
+                rows={3}
+              />
+            </div>
+          </div>
+
+          <div className="flex gap-3">
+            <Button
+              variant="outline"
+              onClick={() => setSelectedEquipment(null)}
+              className="flex-1"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleUpdateStatus}
+              className="flex-1 bg-[#e9333f] hover:bg-[#d12233] text-white"
+            >
+              Update Status
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
