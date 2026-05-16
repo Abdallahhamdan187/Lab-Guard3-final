@@ -1,4 +1,54 @@
 -- Mock Data (Copy and paste into pg admin 4 and run)
+
+-- Users
+INSERT INTO public.users (
+    id, name, email, password, role, department, student_id, image_url, created_at
+) VALUES
+(
+    13,
+    'Ahmed Kalil',
+    'ahmad.khalil@htu.edu.jo',
+    '$2b$10$xUpFX5oBjL2TEXD5YREaQuqS65i.qcat4ffyMu//eejgaHErHSmnW',
+    'student',
+    'Chemistry Lab',
+    '22110389',
+    NULL,
+    '2026-05-11 03:23:58'
+),
+(
+    14,
+    'Sarah',
+    'dr.sarah.instructor@htu.edu.jo',
+    '$2b$10$.0G1xsnE9shbog5IkQ5bk.B.16a/kRfpCAcd0bPyUsr.brZrTdiFu',
+    'instructor',
+    'Chemistry Lab',
+    NULL,
+    NULL,
+    '2026-05-11 03:24:53'
+),
+(
+    15,
+    'Assistant',
+    'eng.assistant@htu.edu.jo',
+    '$2b$10$7MPXKfoPlMiJUN15YS5W2uqUm15q06S2y9XwkcYM99FxjshXGfvM6',
+    'lab-assistant',
+    'Electrical Engineering',
+    NULL,
+    NULL,
+    '2026-05-11 03:25:10'
+),
+(
+    16,
+    'Ahmad',
+    'ahmad.admin@htu.edu.jo',
+    '$2b$10$54OxtI3x24vuuqXG9QA98.4nub8bicK6JGFtjs0/qwHaGuHc4jSai',
+    'admin',
+    'Administration',
+    NULL,
+    NULL,
+    '2026-05-11 03:25:27'
+);
+
 -- Locations
 INSERT INTO locations (lab_name, section, description) VALUES
 ('Lab A', 'Shelf 3', NULL),
