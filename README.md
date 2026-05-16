@@ -11,7 +11,9 @@
 
 ### 1. Database Setup
 
-Open pgAdmin 4 and copy and paste the code found in the file [`database.sql`](https://github.com/ZaidHawari/Lab-Guard3/blob/master/database/labguard.sql) and run it.
+Open pgAdmin 4, copy the SQL from [database.sql](https://github.com/ZaidHawari/Lab-Guard3/blob/main/database/database.sql), and run it.
+
+You can also copy and run the SQL queries from [data.txt](https://github.com/ZaidHawari/Lab-Guard3/blob/main/database/data.txt) to populate the database with mock data.
 
 ---
 
