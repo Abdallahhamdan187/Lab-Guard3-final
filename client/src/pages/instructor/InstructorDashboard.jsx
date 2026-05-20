@@ -555,7 +555,7 @@ export function InstructorDashboard() {
       </div>
 
       {/* Row 2: Most Used Equipment + Purpose Pie */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <h3 className="text-base font-semibold text-gray-900 mb-4">Most Requested Equipment</h3>
           <ResponsiveContainer width="100%" height={240}>
@@ -571,29 +571,7 @@ export function InstructorDashboard() {
           </ResponsiveContainer>
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h3 className="text-base font-semibold text-gray-900 mb-4">Request Purposes</h3>
-          <ResponsiveContainer width="100%" height={160}>
-            <PieChart>
-              <Pie data={purposeData} cx="50%" cy="50%" outerRadius={65} paddingAngle={2} dataKey="value"
-                label={({ percent }) => `${Math.round(percent * 100)}%`} labelLine={false} fontSize={10}>
-                {purposeData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-              </Pie>
-              <Tooltip content={<CustomTooltip />} />
-            </PieChart>
-          </ResponsiveContainer>
-          <div className="space-y-1.5 mt-2">
-            {purposeData.map((d, i) => (
-              <div key={i} className="flex items-center justify-between text-xs">
-                <div className="flex items-center gap-1.5">
-                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: COLORS[i % COLORS.length] }} />
-                  <span className="text-gray-600">{d.name}</span>
-                </div>
-                <span className="font-semibold text-gray-800">{d.value}%</span>
-              </div>
-            ))}
-          </div>
-        </div>
+
       </div>
 
       {/* Row 3: Equipment Status + Student Radar */}

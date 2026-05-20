@@ -347,7 +347,7 @@ export function AdminDashboard() {
       </div>
 
       {/* Row 3: Equipment Utilization + Role Radar */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-1 gap-6">
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <h3 className="text-base font-semibold text-gray-900 mb-4">Equipment Utilization Rate (%)</h3>
           {statsLoading ? (
@@ -371,19 +371,7 @@ export function AdminDashboard() {
           )}
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h3 className="text-base font-semibold text-gray-900 mb-4">User Role Activity Radar</h3>
-          <ResponsiveContainer width="100%" height={250}>
-            <RadarChart data={roleRadarData}>
-              <PolarGrid stroke="#e5e7eb" />
-              <PolarAngleAxis dataKey="subject" tick={{ fontSize: 11 }} />
-              <Radar name="Students" dataKey="students" stroke="#3498db" fill="#3498db" fillOpacity={0.15} strokeWidth={2} />
-              <Radar name="Instructors" dataKey="instructors" stroke="#27ae60" fill="#27ae60" fillOpacity={0.15} strokeWidth={2} />
-              <Radar name="Lab Assistants" dataKey="assistants" stroke="#f39c12" fill="#f39c12" fillOpacity={0.15} strokeWidth={2} />
-              <Legend wrapperStyle={{ fontSize: 11 }} />
-            </RadarChart>
-          </ResponsiveContainer>
-        </div>
+
       </div>
 
       {/* Row 4: Recent Users + Logs */}
