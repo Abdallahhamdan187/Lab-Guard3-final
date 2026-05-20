@@ -56,9 +56,9 @@ export function StudentDashboard() {
   }, []);
   const navigate = useNavigate();
   // Calculate statistics
-  const activeBorrows = stats?.activeBorrows || 0;
+  const studentStats = stats?.studentStats
   const pendingRequests = stats?.pendingRequests || 0;
-  const completedReturns = stats?.completedReturns || 0;
+  const completedReturnsStats = stats?.completedReturnsStats;
   const availableEquipment = stats?.availableEquipment || 0;
 
   const COLORS = ['#e9333f', '#2c3e50', '#3498db', '#95a5a6'];
@@ -75,27 +75,27 @@ export function StudentDashboard() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard
           title="Active Borrows"
-          value={activeBorrows}
+          value={studentStats?.activeBorrows.count ?? 0}
           icon={Package}
           color="#e9333f"
-          trend={{ value: "12%", isPositive: true }}
+          trend={{ value: String(studentStats?.activeBorrows.changePercent ?? 0) + "%", isPositive: studentStats?.activeBorrows.isPositive ?? false }}
         />
         <StatCard
           title="Pending Requests"
-          value={pendingRequests}
+          value={studentStats?.pendingRequests.count ?? 0}
           icon={Clock}
           color="#f39c12"
         />
         <StatCard
           title="Completed Returns"
-          value={completedReturns}
+          value={studentStats?.completedReturns.count ?? 0}
           icon={CheckCircle}
           color="#27ae60"
-          trend={{ value: "8%", isPositive: true }}
+          trend={{ value: String(studentStats?.completedReturns.changePercent ?? 0) + "%", isPositive: studentStats?.completedReturns.isPositive ?? false }}
         />
         <StatCard
           title="Available Equipment"
-          value={availableEquipment}
+          value={studentStats?.availableEquipment.count ?? 0}
           icon={TrendingUp}
           color="#3498db"
         />

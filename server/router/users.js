@@ -1,5 +1,5 @@
 import express from "express"
-import {getUsers,register} from "../controller/users.js";
+import {changePassword, getUsers, register} from "../controller/users.js";
 import {authorizeRoles} from "../middleware/role.js";
 import {addTransaction, getMyTransactions, returnTransaction} from "../controller/transactions.js";
 import {getMyNotifications, markAllNotificationsRead, markNotificationRead} from "../controller/notifications.js";
@@ -16,4 +16,5 @@ route.patch("/me/notifications/read-all",markAllNotificationsRead)
 route.patch("/me/notifications/:id/read",markNotificationRead)
 
 route.post("/",authorizeRoles("admin"), register);
+route.post("/me/change-password",changePassword)
 export default route

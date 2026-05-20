@@ -4,6 +4,8 @@ import { parseLimit } from "../utils/queryHelpers.js"
 import {sendNotification, sendNotificationToUsers} from "../utils/notifications.js";
 import {NOTIFICATION_TYPES} from "../constants/notificationTypes.js";
 import {EQUIPMENT_STATUS} from "../constants/equipmentStatus.js";
+import {LOG_ACTIONS} from "../constants/logActions.js";
+import {log} from "../utils/logger.js";
 
 export const addTransaction = async (req, res) => {
 
@@ -202,6 +204,13 @@ export const addTransaction = async (req, res) => {
             userId
         });
 
+        log(req.io,LOG_ACTIONS.BORROW_REQUEST,userId,{
+            equipmentName: equipment.name
+        })
+
+        req.io.to("instructors")
+            .emit("pending_approvals", log);
+
         res.status(201).json({
             message: "Borrow request submitted successfully",
             transactionId: result.rows[0].id
@@ -233,11 +242,14 @@ export const getTransactions = async (req, res) => {
                 t.purpose,
                 t.quantity,
                 t.request_date,
+                t.expected_return_date,
                 t.approval_date,
+                t.denial_reason,
 
                 e.name AS equipment_name,
                 a.name AS approved_by_name,
-                u.name AS user_name
+                u.name AS user_name,
+                u.student_id AS student_id
 
             FROM transactions t
             LEFT JOIN equipment e ON t.equipment_id = e.id
@@ -350,10 +362,12 @@ export const getMyTransactions = async (req, res) => {
                 t.expected_return_date,
                 t.approval_date,
                 t.return_date,
-
+                t.denial_reason,
+                
                 e.name AS equipment_name,
                 a.name AS approved_by_name,
-                u.name AS user_name
+                u.name AS user_name,
+                u.student_id AS student_id
 
             FROM transactions t
             LEFT JOIN equipment e ON t.equipment_id = e.id
@@ -385,17 +399,19 @@ export const denyTransaction = async (req, res) => {
 
     const { txnId } = req.params;
     const deniedBy = req.user.id;
-
+    const { reason } = req.body;
     try {
 
         const { rows: txnRows } = await db.query(
             `
             SELECT
                 t.*,
-                e.name AS equipment_name
+                e.name AS equipment_name,
+                u.name AS user
             FROM transactions t
             LEFT JOIN equipment e
                 ON t.equipment_id = e.id
+            LEFT JOIN users u ON t.user_id = u.id    
             WHERE t.id = $1
             `,
             [txnId]
@@ -421,10 +437,11 @@ export const denyTransaction = async (req, res) => {
             SET
                 status = 'Denied',
                 approved_by = $1,
-                approval_date = NOW()
-            WHERE id = $2
+                approval_date = NOW(),
+                denial_reason = $2
+            WHERE id = $3
             `,
-            [deniedBy, txnId]
+            [deniedBy,reason || null, txnId]
         );
 
         await sendNotification({
@@ -435,6 +452,11 @@ export const denyTransaction = async (req, res) => {
             userId: txn.user_id,
             transactionId: txn.id
         });
+
+        log(req.io,LOG_ACTIONS.DENY_TRANSACTION,deniedBy,{
+            equipmentName: txn.equipment_name,
+            user: txn.user
+        })
 
         res.json({
             message: "Transaction denied successfully"
@@ -490,7 +512,7 @@ export const approveTransaction = async (req, res) => {
 
         const { rows: equipmentRows } = await connection.query(
             `
-            SELECT name, available_quantity
+            SELECT name, available_quantity,status
             FROM equipment
             WHERE id = $1
             FOR UPDATE
@@ -524,16 +546,14 @@ export const approveTransaction = async (req, res) => {
             `,
             [approvedBy, txnId]
         );
+        const stockLeft = equipment.available_quantity - txn.quantity;
 
+        const newStatus = stockLeft > 0 ? equipment.status : EQUIPMENT_STATUS.IN_USE;
         await connection.query(
             `
-            UPDATE equipment
-            SET available_quantity = available_quantity - $1
-            WHERE id = $2
-            `,
-            [txn.quantity, txn.equipment_id]
+            UPDATE equipment SET available_quantity = available_quantity - $1,status = $2 WHERE id = $3`,
+            [txn.quantity, newStatus, txn.equipment_id]
         );
-
         const { rows: userRows } = await connection.query(
             `
             SELECT name
@@ -554,8 +574,6 @@ export const approveTransaction = async (req, res) => {
             message: `Your borrow request for ${equipment.name} has been approved by ${user.name}.`,
             userId: txn.user_id
         });
-
-        const stockLeft = equipment.available_quantity - txn.quantity;
 
         const { rows: labAssistants } = await connection.query(
             `
@@ -587,7 +605,11 @@ export const approveTransaction = async (req, res) => {
                 userIds
             });
         }
-
+        const targetUserRows = await db.query("SELECT name FROM users WHERE id=$1",[txn.user_id])
+        log(req.io,LOG_ACTIONS.APPROVE_TRANSACTION,approvedBy,{
+            equipmentName: equipment.name,
+            user: targetUserRows.rows[0].name || "Unknown"
+        })
         res.json({
             message: "Transaction approved successfully"
         });
@@ -595,6 +617,7 @@ export const approveTransaction = async (req, res) => {
     } catch (err) {
 
         await connection.query("ROLLBACK");
+        console.log(err)
         res.status(500).json({
             error: err.message
         });
@@ -651,7 +674,7 @@ export const returnTransaction = async (req, res) => {
 
         const { rows: equipmentRows } = await connection.query(
             `
-            SELECT id
+            SELECT id,name,status
             FROM equipment
             WHERE id = $1
             FOR UPDATE
@@ -677,14 +700,15 @@ export const returnTransaction = async (req, res) => {
             `,
             [txnId]
         );
-
+        const newStatus = equipment.status === EQUIPMENT_STATUS.IN_USE ? EQUIPMENT_STATUS.AVAILABLE : equipment.status
         await connection.query(
             `
             UPDATE equipment
-            SET available_quantity = available_quantity + $1
-            WHERE id = $2
+            SET available_quantity = available_quantity + $1,
+            status = $2
+            WHERE id = $3
             `,
-            [txn.quantity, txn.equipment_id]
+            [txn.quantity,newStatus, txn.equipment_id]
         );
 
         await connection.query(
@@ -700,7 +724,9 @@ export const returnTransaction = async (req, res) => {
         );
 
         await connection.query("COMMIT");
-
+        log(req.io,LOG_ACTIONS.RETURN_EQUIPMENT,userId,{
+            equipmentName: equipment.name
+        })
         res.json({
             message: "Equipment returned successfully"
         });

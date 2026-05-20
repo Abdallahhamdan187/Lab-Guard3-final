@@ -1,5 +1,6 @@
 import { Outlet, Link, useLocation, useNavigate, Navigate } from "react-router-dom";
 import { getUserSession, clearUserSession } from "@/utils/auth";
+import logoImg from "@/assets/favicon.png";
 import {
   LayoutDashboard,
   Package,
@@ -12,7 +13,7 @@ import {
   ShieldCheck,
   UserCheck
 } from "lucide-react";
-import {useState, useEffect} from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -23,7 +24,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import api from "@/api.js";
-import {socket} from "@/socket/socket.js";
+import { socket } from "@/socket/socket.js";
 export function RootLayout() {
   const user = getUserSession();
   const navigate = useNavigate();
@@ -48,8 +49,8 @@ export function RootLayout() {
         setNotifications(res.data);
       } catch (err) {
         console.error(
-            "Failed loading notifications",
-            err
+          "Failed loading notifications",
+          err
         );
       }
     };
@@ -77,11 +78,11 @@ export function RootLayout() {
     try {
       await api.patch(`/users/me/notifications/${id}/read`)
       setNotifications(prev =>
-          prev.map(n =>
-              n.id === id
-                  ? { ...n, is_read: true }
-                  : n
-          )
+        prev.map(n =>
+          n.id === id
+            ? { ...n, is_read: true }
+            : n
+        )
       );
     } catch (err) {
       console.error(err);
@@ -91,10 +92,10 @@ export function RootLayout() {
     try {
       await api.patch("/users/me/notifications/read-all")
       setNotifications(prev =>
-          prev.map(n => ({
-            ...n,
-            is_read: true
-          }))
+        prev.map(n => ({
+          ...n,
+          is_read: true
+        }))
       );
     } catch (err) {
       console.error(err);
@@ -112,9 +113,9 @@ export function RootLayout() {
 
   const notifIconColor = {
     success: "text-green-500",
-    error:   "text-red-500",
+    error: "text-red-500",
     warning: "text-yellow-500",
-    info:    "text-blue-500",
+    info: "text-blue-500",
   };
 
   const handleLogout = () => {
@@ -161,8 +162,12 @@ export function RootLayout() {
               {sidebarOpen ? <X size={24} /> : <Menu size={24} />}
             </button>
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-[#e9333f] rounded-lg flex items-center justify-center shadow-md">
-                <span className="text-white font-bold text-lg">LG</span>
+              <div className="w-10 h-10 bg-white border border-gray-100 rounded-lg flex items-center justify-center shadow-md">
+                <img
+                  src={logoImg}
+                  alt="LabGuard Logo"
+                  className="w-full h-full object-contain p-0.05"
+                />
               </div>
               <div>
                 <h1 className="text-xl font-bold text-gray-900">LabGuard</h1>
@@ -277,25 +282,25 @@ export function RootLayout() {
           <nav className="p-4 space-y-2 h-[calc(100vh-73px)] overflow-y-auto">
             {/* Render Student Section — only if user has access to these pages */}
             {studentSection.length > 0 && (
-            <div className="mb-6">
-              <p className="text-xs uppercase text-gray-400 mb-2 px-3">Student Portal</p>
-              {studentSection.map((item) => {
-                const Icon = item.icon;
-                const active = isActive(item.path);
-                return (
-                  <Link
-                    key={item.path}
-                    to={item.path}
-                    onClick={() => setSidebarOpen(false)}
-                    className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 ${active ? "bg-[#e9333f] text-white shadow-lg" : "text-gray-300 hover:bg-[#34495e] hover:text-white"
-                      }`}
-                  >
-                    <Icon size={20} />
-                    <span className="text-sm">{item.label}</span>
-                  </Link>
-                );
-              })}
-            </div>
+              <div className="mb-6">
+                <p className="text-xs uppercase text-gray-400 mb-2 px-3">Student Portal</p>
+                {studentSection.map((item) => {
+                  const Icon = item.icon;
+                  const active = isActive(item.path);
+                  return (
+                    <Link
+                      key={item.path}
+                      to={item.path}
+                      onClick={() => setSidebarOpen(false)}
+                      className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 ${active ? "bg-[#e9333f] text-white shadow-lg" : "text-gray-300 hover:bg-[#34495e] hover:text-white"
+                        }`}
+                    >
+                      <Icon size={20} />
+                      <span className="text-sm">{item.label}</span>
+                    </Link>
+                  );
+                })}
+              </div>
             )}
 
             {/* Render Portal Section (Only if user has access to at least one) */}

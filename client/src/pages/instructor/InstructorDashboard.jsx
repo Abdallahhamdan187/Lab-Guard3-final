@@ -1,13 +1,13 @@
-import { Package, Users, CheckCircle, Clock, TrendingUp, XCircle, AlertTriangle, FileDown, FileSpreadsheet, FileText, X, Search, Filter,Plus } from "lucide-react";
+import { Package, Users, CheckCircle, Clock, TrendingUp, XCircle, AlertTriangle, FileDown, FileSpreadsheet, FileText, X, Search, Filter, Plus, Loader2, Eye } from "lucide-react";
 import { StatCard } from "@/components/shared/StatCard";
 import { StatusBadge } from "@/components/shared/StatusBadge";
-import { mockTransactions, mockEquipment } from "@/data/mockData";
+import { mockEquipment } from "@/data/mockData";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import {useEffect, useState} from "react";
+import { useEffect, useState } from "react";
 import { exportToPDF, exportToExcel } from "@/utils/exportUtils";
 import { AddEquipmentModal } from "@/components/shared/AddEquipmentModal";
 import {
@@ -19,23 +19,24 @@ import {
   Radar, PolarGrid, PolarAngleAxis
 } from "recharts";
 import api from "@/api.js";
+import {socket} from "@/socket/socket.js";
 
 const COLORS = ["#e9333f", "#3498db", "#27ae60", "#f39c12", "#9b59b6"];
 
 const purposeData = [
   { name: "Lab Assignment", value: 38 },
   { name: "Course Project", value: 28 },
-  { name: "Research",       value: 18 },
+  { name: "Research", value: 18 },
   { name: "Senior Project", value: 12 },
-  { name: "Personal",       value: 4  },
+  { name: "Personal", value: 4 },
 ];
 
 const studentActivityRadar = [
-  { subject: "Requests",       A: 80 },
-  { subject: "On-time Returns",A: 92 },
-  { subject: "Approved Rate",  A: 75 },
+  { subject: "Requests", A: 80 },
+  { subject: "On-time Returns", A: 92 },
+  { subject: "Approved Rate", A: 75 },
   { subject: "Equipment Care", A: 88 },
-  { subject: "Compliance",     A: 95 },
+  { subject: "Compliance", A: 95 },
 ];
 
 const CustomTooltip = ({ active, payload, label }) => {
@@ -51,26 +52,66 @@ const CustomTooltip = ({ active, payload, label }) => {
 };
 
 const STATUS_COLORS = {
-  Approved:  "bg-green-100 text-green-800",
-  Pending:   "bg-amber-100 text-amber-800",
+  Approved: "bg-green-100 text-green-800",
+  Pending: "bg-amber-100 text-amber-800",
   Completed: "bg-blue-100 text-blue-800",
-  Denied:    "bg-red-100 text-red-800",
+  Denied: "bg-red-100 text-red-800",
 };
 
 // ── All-Transactions Modal ────────────────────────────────────────────────────
 function AllTransactionsModal({ onClose }) {
-  const [search, setSearch]   = useState("");
-  const [typeF,  setTypeF]    = useState("all");
-  const [statusF,setStatusF]  = useState("all");
+  const [search, setSearch] = useState("");
+  const [typeF, setTypeF] = useState("all");
+  const [statusF, setStatusF] = useState("all");
+  const [allTransactions, setAll] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const filtered = mockTransactions.filter(t => {
+  useEffect(() => {
+    const fetchAll = async () => {
+      setLoading(true);
+      try {
+        const res = await api.get("/transactions");
+        const data = Array.isArray(res.data)
+          ? res.data
+          : res.data.transactions || res.data.data || [];
+        if (data.length > 0) {
+          console.log("[AllTransactions] Raw field names:", Object.keys(data[0]));
+          console.log("[AllTransactions] First record:", data[0]);
+        }
+        // Normalize field names from backend
+        setAll(data.map(t => ({
+          id: t.id || t._id,
+          equipmentName: t.equipmentName || t.equipment_name || t.equipment?.name || "—",
+          type: t.type,
+          status: t.status,
+          quantity: t.quantity,
+          purpose: t.purpose || "—",
+          requestDate: t.requestDate || t.request_date || t.createdAt,
+          expectedReturnDate: t.expectedReturnDate || t.expected_return_date || t.expectedReturn || t.returnDeadline || t.return_deadline || t.dueDate || t.due_date || null,
+          actualReturnDate: t.actualReturnDate || t.actual_return_date || t.returnDate || null,
+          userName: t.userName || t.user_name || t.user?.name || t.student?.name || t.borrower?.name || "—",
+          studentId: t.studentId || t.student_id || t.universityId || t.university_id || t.universityNumber || t.university_number || t.uniNumber || t.uni_number || t.studentNumber || t.user?.studentId || t.user?.student_id || t.user?.universityId || t.student?.studentId || t.student?.universityId || "—",
+          approvedBy: t.approvedBy || t.approved_by || t.approvedByName || null,
+          denialReason: t.denialReason || t.denial_reason || t.denyReason || null,
+        })));
+      } catch (err) {
+        console.error("Failed to load transactions:", err);
+        toast.error("Failed to load transactions");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchAll();
+  }, []);
+
+  const filtered = allTransactions.filter(t => {
     const q = search.toLowerCase();
     const matchSearch = !q ||
-      t.equipmentName.toLowerCase().includes(q) ||
-      t.userName.toLowerCase().includes(q) ||
+      (t.equipmentName || "").toLowerCase().includes(q) ||
+      (t.userName || "").toLowerCase().includes(q) ||
       (t.studentId || "").toLowerCase().includes(q) ||
       (t.approvedBy || "").toLowerCase().includes(q);
-    const matchType   = typeF   === "all" || t.type   === typeF;
+    const matchType = typeF === "all" || t.type === typeF;
     const matchStatus = statusF === "all" || t.status === statusF;
     return matchSearch && matchType && matchStatus;
   });
@@ -95,7 +136,7 @@ function AllTransactionsModal({ onClose }) {
             <FileText className="text-white" size={22} />
             <div>
               <h2 className="text-lg font-bold text-white">All System Transactions</h2>
-              <p className="text-gray-300 text-xs">{filtered.length} of {mockTransactions.length} records shown</p>
+              <p className="text-gray-300 text-xs">{loading ? "Loading…" : `${filtered.length} of ${allTransactions.length} records shown`}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -180,18 +221,25 @@ function AllTransactionsModal({ onClose }) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.length > 0 ? filtered.map(txn => (
+              {loading ? (
+                <TableRow>
+                  <TableCell colSpan={8} className="py-16 text-center">
+                    <div className="flex flex-col items-center gap-2">
+                      <Loader2 size={28} className="text-gray-300 animate-spin" />
+                      <p className="text-sm text-gray-400">Loading transactions…</p>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ) : filtered.length > 0 ? filtered.map(txn => (
                 <TableRow key={txn.id} className="hover:bg-gray-50 transition-colors">
                   <TableCell className="text-xs text-gray-600 whitespace-nowrap">
-                    {new Date(txn.requestDate).toLocaleDateString()}
+                    {txn.requestDate ? new Date(txn.requestDate).toLocaleDateString() : "—"}
                   </TableCell>
                   <TableCell>
                     <p className="text-xs font-medium text-gray-900">{txn.equipmentName}</p>
                   </TableCell>
                   <TableCell>
-                    <Badge variant="outline" className="text-xs">
-                      {txn.type}
-                    </Badge>
+                    <Badge variant="outline" className="text-xs">{txn.type}</Badge>
                   </TableCell>
                   <TableCell>
                     <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${STATUS_COLORS[txn.status] || "bg-gray-100 text-gray-700"}`}>
@@ -201,7 +249,7 @@ function AllTransactionsModal({ onClose }) {
                   <TableCell>
                     <div className="flex items-center gap-2">
                       <div className="w-6 h-6 rounded-full bg-[#3498db] text-white flex items-center justify-center text-[10px] font-bold flex-shrink-0">
-                        {txn.userName.charAt(0)}
+                        {(txn.userName || "?").charAt(0)}
                       </div>
                       <p className="text-xs font-medium text-gray-900 whitespace-nowrap">{txn.userName}</p>
                     </div>
@@ -230,7 +278,7 @@ function AllTransactionsModal({ onClose }) {
         {/* Footer */}
         <div className="px-6 py-3 border-t border-gray-100 bg-gray-50 flex items-center justify-between">
           <p className="text-xs text-gray-500">
-            Showing <strong>{filtered.length}</strong> of <strong>{mockTransactions.length}</strong> transactions
+            Showing <strong>{filtered.length}</strong> of <strong>{allTransactions.length}</strong> transactions
           </p>
           <div className="flex gap-2">
             <Button variant="outline" onClick={handleExcel} size="sm" className="text-xs gap-1.5">
@@ -246,12 +294,87 @@ function AllTransactionsModal({ onClose }) {
   );
 }
 
+function TxnDetailModal({ txn, onClose }) {
+  if (!txn) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+        <div className="flex items-center justify-between px-6 py-4 bg-gradient-to-r from-[#2c3e50] to-[#34495e]">
+          <h2 className="text-base font-bold text-white">Transaction Details</h2>
+          <button onClick={onClose} className="text-white hover:bg-white/20 p-1 rounded-full"><X size={18} /></button>
+        </div>
+        <div className="p-6 space-y-3">
+          {[
+            ["Student", txn.userName],
+            ["Uni Number", txn.studentId || "—"],
+            ["Equipment", txn.equipmentName],
+            ["Quantity", txn.quantity],
+            ["Purpose", txn.purpose],
+            ["Request Date", txn.requestDate ? new Date(txn.requestDate).toLocaleString() : "—"],
+            ["Expected Return", txn.expectedReturnDate ? new Date(txn.expectedReturnDate).toLocaleDateString() : "—"],
+            ["Status", txn.status],
+          ].map(([label, value]) => (
+            <div key={label} className="flex justify-between items-start gap-4">
+              <span className="text-xs text-gray-500 font-medium w-36 flex-shrink-0">{label}</span>
+              <span className="text-sm font-medium text-gray-900 text-right">{value || "—"}</span>
+            </div>
+          ))}
+        </div>
+        <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-end">
+          <Button size="sm" onClick={onClose} className="bg-[#2c3e50] hover:bg-[#34495e] text-white">Close</Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DenyReasonModal({ txn, onConfirm, onClose }) {
+  const [reason, setReason] = useState("");
+  if (!txn) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+        <div className="flex items-center justify-between px-6 py-4 bg-gradient-to-r from-red-700 to-red-600">
+          <h2 className="text-base font-bold text-white">Deny Request</h2>
+          <button onClick={onClose} className="text-white hover:bg-white/20 p-1 rounded-full"><X size={18} /></button>
+        </div>
+        <div className="p-6 space-y-4">
+          <p className="text-sm text-gray-600">
+            Denying borrow request for <span className="font-semibold text-gray-900">{txn.equipmentName}</span> by <span className="font-semibold text-gray-900">{txn.userName}</span>.
+          </p>
+          <div className="space-y-1.5">
+            <label className="text-sm font-semibold text-gray-700">Reason for Denial *</label>
+            <textarea
+              rows={3}
+              className="w-full border border-gray-200 rounded-lg p-3 text-sm resize-none focus:outline-none focus:border-red-400"
+              placeholder="e.g. Equipment reserved for lab exam, insufficient purpose..."
+              value={reason}
+              onChange={e => setReason(e.target.value)}
+            />
+            <p className="text-xs text-gray-400">This reason will be visible to the student.</p>
+          </div>
+        </div>
+        <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex gap-3 justify-end">
+          <Button size="sm" variant="outline" onClick={onClose}>Cancel</Button>
+          <Button size="sm" onClick={() => onConfirm(reason.trim())}
+            disabled={!reason.trim()}
+            className="bg-red-600 hover:bg-red-700 text-white gap-1.5">
+            <XCircle size={14} /> Confirm Deny
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main Dashboard ────────────────────────────────────────────────────────────
 export function InstructorDashboard() {
   const [showAllTxns, setShowAllTxns] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [selectedTxn, setSelectedTxn] = useState(null);
+  const [denyingTxn, setDenyingTxn] = useState(null);
   const [stats, setStats] = useState(null);
-  const [pendingApprovals,setPendingApprovals] = useState([])
+  const [pendingApprovals, setPendingApprovals] = useState([])
   const equipmentStatus = stats?.equipmentStatus || []
   const equipmentUsage = stats?.equipmentUsage || []
   const peakRequestHours = stats?.peakRequestHours || []
@@ -260,25 +383,41 @@ export function InstructorDashboard() {
     try {
       const res = await api.get("/dashboard/instructor")
       setStats(res.data)
-    }catch (err) {
-      console.log("Pending Approvals Error",err)
+    } catch (err) {
+      console.log("Pending Approvals Error", err)
     }
   }
 
   const fetchPendingApprovals = async () => {
     try {
       const res = await api.get("/transactions?status=Pending")
-      console.log("pending approvals",res)
-      setPendingApprovals(res.data)
-    }catch (err) {
-      console.log("Pending Approvals Error",err)
+      const raw = Array.isArray(res.data) ? res.data : res.data.transactions || res.data.data || [];
+      if (raw.length > 0) console.log("[PendingApprovals] ALL RAW FIELDS:", JSON.stringify(raw[0], null, 2));
+      setPendingApprovals(raw.map(t => ({
+        id: t.id || t._id,
+        equipmentName: t.equipmentName || t.equipment_name || t.equipment?.name || "—",
+        type: t.type,
+        status: t.status,
+        quantity: t.quantity,
+        purpose: t.purpose || "—",
+        requestDate: t.requestDate || t.request_date || t.createdAt,
+        expectedReturnDate: t.expectedReturnDate || t.expected_return_date || t.expectedReturn || t.returnDeadline || t.return_deadline || t.dueDate || t.due_date || null,
+        userName: t.userName || t.user_name || t.user?.name || t.student?.name || t.borrower?.name || "—",
+        studentId: t.studentId || t.student_id || t.universityId || t.university_id || t.universityNumber || t.university_number || t.uniNumber || t.uni_number || t.studentNumber || t.user?.studentId || t.user?.student_id || t.user?.universityId || t.student?.studentId || t.student?.universityId || "—",
+        userRole: t.userRole || t.user?.role || "Student",
+        approvedBy: t.approvedBy || t.approved_by || t.approvedByName || null,
+      })));
+    } catch (err) {
+      console.log("Pending Approvals Error", err)
     }
   }
 
-  useEffect(()=>{
+  useEffect(() => {
     fetchStats()
     fetchPendingApprovals()
-  },[])
+  }, [])
+
+
   const handleApprove = async (id, name) => {
     try {
       await api.patch(`/transactions/${id}/approve`)
@@ -290,20 +429,23 @@ export function InstructorDashboard() {
     }
   };
 
-  const handleDeny = async (id, name) => {
+  const handleDeny = async (id, name, reason) => {
     try {
-      await api.patch(`/transactions/${id}/deny`)
-      await fetchStats()
-      await fetchPendingApprovals()
+      await api.patch(`/transactions/${id}/deny`, { reason });
+      await fetchStats();
+      await fetchPendingApprovals();
+      setDenyingTxn(null);
       toast.error(`Denied borrow request for ${name}`);
     } catch (err) {
-      console.log("Deny Transaction Error", err)
+      console.log("Deny Transaction Error", err);
     }
   };
-
-  const approvedToday = stats?.approvedToday || 0
-  const totalStudents  = stats?.totalStudents || 0;
-  const activeEquipment = equipmentStatus.filter(e => e.status === "In Use").length;
+  const instructorStats = stats?.instructorStats
+  console.log(stats)
+  const totalStudents = stats?.totalStudents || 0;
+  const activeEquipment = equipmentStatus.find(
+      e => e.status === "In Use"
+  )?.value || 0;
 
 
 
@@ -312,10 +454,20 @@ export function InstructorDashboard() {
 
       {showAllTxns && <AllTransactionsModal onClose={() => setShowAllTxns(false)} />}
 
+      {denyingTxn && (
+        <DenyReasonModal
+          txn={denyingTxn}
+          onConfirm={(reason) => handleDeny(denyingTxn.id, denyingTxn.equipmentName, reason)}
+          onClose={() => setDenyingTxn(null)}
+        />
+      )}
+
+      <TxnDetailModal txn={selectedTxn} onClose={() => setSelectedTxn(null)} />
+
       <AddEquipmentModal
         open={showAddModal}
         onClose={() => setShowAddModal(false)}
-        onAdd={() => {}}
+        onAdd={() => { }}
       />
 
       {/* Header */}
@@ -350,10 +502,10 @@ export function InstructorDashboard() {
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
-        <StatCard title="Pending Approvals"  value={pendingApprovals.length}  icon={Clock}      color="#f39c12" />
-        <StatCard title="Approved Today"     value={approvedToday}       icon={CheckCircle} color="#27ae60" trend={{ value: "15%", isPositive: true }} />
-        <StatCard title="Active Students"    value={totalStudents}        icon={Users}       color="#3498db" />
-        <StatCard title="Equipment in Use"   value={activeEquipment}      icon={TrendingUp}  color="#e9333f" />
+        <StatCard title="Pending Approvals" value={pendingApprovals.length} icon={Clock} color="#f39c12" />
+        <StatCard title="Approved Today" value={instructorStats?.approvedToday.count ?? 0} icon={CheckCircle} color="#27ae60" trend={{ value: String(instructorStats?.approvedToday.changePercent ?? 0) + "%", isPositive: instructorStats?.approvedToday.isPositive ?? false }} />
+        <StatCard title="Active Students" value={totalStudents} icon={Users} color="#3498db" />
+        <StatCard title="Equipment in Use" value={activeEquipment} icon={TrendingUp} color="#e9333f" />
       </div>
 
       {/* Row 1: Weekly Activity + Hourly */}
@@ -364,11 +516,11 @@ export function InstructorDashboard() {
             <AreaChart data={weeklyData}>
               <defs>
                 <linearGradient id="reqGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%"  stopColor="#e9333f" stopOpacity={0.25} />
+                  <stop offset="5%" stopColor="#e9333f" stopOpacity={0.25} />
                   <stop offset="95%" stopColor="#e9333f" stopOpacity={0} />
                 </linearGradient>
                 <linearGradient id="appGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%"  stopColor="#27ae60" stopOpacity={0.25} />
+                  <stop offset="5%" stopColor="#27ae60" stopOpacity={0.25} />
                   <stop offset="95%" stopColor="#27ae60" stopOpacity={0} />
                 </linearGradient>
               </defs>
@@ -377,9 +529,9 @@ export function InstructorDashboard() {
               <YAxis stroke="#9ca3af" fontSize={12} />
               <Tooltip content={<CustomTooltip />} />
               <Legend wrapperStyle={{ fontSize: 12 }} />
-              <Area type="monotone" dataKey="requests"  stroke="#e9333f" fill="url(#reqGrad)" strokeWidth={2.5} name="Requests"  dot={{ r: 4, fill: "#e9333f" }} />
+              <Area type="monotone" dataKey="requests" stroke="#e9333f" fill="url(#reqGrad)" strokeWidth={2.5} name="Requests" dot={{ r: 4, fill: "#e9333f" }} />
               <Area type="monotone" dataKey="approvals" stroke="#27ae60" fill="url(#appGrad)" strokeWidth={2.5} name="Approvals" dot={{ r: 4, fill: "#27ae60" }} />
-              <Line type="monotone" dataKey="denials"   stroke="#f39c12" strokeWidth={2} strokeDasharray="4 4" name="Denials" dot={{ r: 3 }} />
+              <Line type="monotone" dataKey="denials" stroke="#f39c12" strokeWidth={2} strokeDasharray="4 4" name="Denials" dot={{ r: 3 }} />
             </AreaChart>
           </ResponsiveContainer>
         </div>
@@ -392,7 +544,7 @@ export function InstructorDashboard() {
               <XAxis dataKey="hour" stroke="#9ca3af" fontSize={10} angle={-35} textAnchor="end" />
               <YAxis stroke="#9ca3af" fontSize={11} />
               <Tooltip content={<CustomTooltip />} />
-              <Bar dataKey="requests" name="Requests" radius={[4,4,0,0]}>
+              <Bar dataKey="requests" name="Requests" radius={[4, 4, 0, 0]}>
                 {peakRequestHours.map((entry, i) => (
                   <Cell key={i} fill={entry.requests >= 12 ? "#e9333f" : entry.requests >= 8 ? "#f39c12" : "#3498db"} />
                 ))}
@@ -412,7 +564,7 @@ export function InstructorDashboard() {
               <XAxis type="number" stroke="#9ca3af" fontSize={11} />
               <YAxis dataKey="name" type="category" stroke="#9ca3af" fontSize={11} width={100} />
               <Tooltip content={<CustomTooltip />} />
-              <Bar dataKey="borrows" name="Borrow Requests" radius={[0,4,4,0]}>
+              <Bar dataKey="borrows" name="Borrow Requests" radius={[0, 4, 4, 0]}>
                 {equipmentUsage.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
               </Bar>
             </BarChart>
@@ -451,7 +603,7 @@ export function InstructorDashboard() {
           <div className="space-y-4">
             {equipmentStatus.map(data => {
               const count = data.value
-              const pct   = data.percentage
+              const pct = data.percentage
               return (
                 <div key={data.status}>
                   <div className="flex items-center justify-between mb-1.5">
@@ -541,11 +693,17 @@ export function InstructorDashboard() {
                   <TableCell><StatusBadge status={txn.status} /></TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-2">
+                      <button
+                        onClick={() => setSelectedTxn(txn)}
+                        className="flex items-center gap-1 text-xs text-[#3498db] font-medium hover:underline mr-1"
+                      >
+                        <Eye size={13} /> Details
+                      </button>
                       <Button size="sm" onClick={() => handleApprove(txn.id, txn.equipmentName)}
                         className="bg-green-600 hover:bg-green-700 text-white h-7 text-xs">
                         <CheckCircle size={13} className="mr-1" /> Approve
                       </Button>
-                      <Button size="sm" variant="outline" onClick={() => handleDeny(txn.id, txn.equipmentName)}
+                      <Button size="sm" variant="outline" onClick={() => setDenyingTxn(txn)}
                         className="border-red-400 text-red-600 hover:bg-red-50 h-7 text-xs">
                         <XCircle size={13} className="mr-1" /> Deny
                       </Button>

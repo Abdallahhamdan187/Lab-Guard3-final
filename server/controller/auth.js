@@ -17,34 +17,38 @@ export const login = async (req, res) => {
         const user = rows[0];
 
         if (!user) {
-            log(LOG_ACTIONS.LOGIN_FAILED_NO_USER)
+            log(req.io,LOG_ACTIONS.LOGIN_FAILED_NO_USER)
             return res.status(401).json({ error: "Wrong email or password" });
         }
 
         const isMatch = await bcrypt.compare(password, user.password);
 
         if (!isMatch) {
-            log(LOG_ACTIONS.LOGIN_FAILED_WRONG_PASSWORD)
+            log(req.io,LOG_ACTIONS.LOGIN_FAILED_WRONG_PASSWORD)
             return res.status(401).json({ error: "Wrong email or password" });
         }
         const token = jwt.sign(
-            { id: user.id, role: user.role },
+            { id: user.id, role: user.role},
             process.env.JWT_SECRET,
             { expiresIn: "1d" }
         );
-        log(LOG_ACTIONS.LOGIN_SUCCESS,user.id)
+        log(req.io,LOG_ACTIONS.LOGIN_SUCCESS,user.id)
         res.json({
             token,
             user: {
-                id: user.id,
-                name: user.name,
-                role: user.role,
-                imageUrl: user.imageUrl
+                id:                 user.id,
+                name:               user.name,
+                email:              user.email,
+                role:               user.role,
+                department:         user.department,
+                studentId:          user.student_id,
+                imageUrl:           user.image_url || null,
+                mustChangePassword: user.must_change_password || false
             }
         });
     } catch (err) {
         console.log(err)
-        log(LOG_ACTIONS.LOGIN_FAILED_SERVER_ERROR)
+        log(req.io,LOG_ACTIONS.LOGIN_FAILED_SERVER_ERROR)
         res.status(500).json({ error: err.message });
     }
 };

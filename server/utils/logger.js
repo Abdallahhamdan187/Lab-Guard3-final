@@ -1,15 +1,16 @@
 import {db} from "../db/connection.js";
-import {LogMessageMap} from "../constants/logActions.js";
-export const log = async (io,action,userId=null) => {
+import {LogMap} from "../constants/logActions.js";
+export const log = async (io,action,userId=null,details={}) => {
     try {
         const result = await db.query(
-            `INSERT INTO system_logs (user_id, action, status)
-             VALUES ($1, $2, $3)
+            `INSERT INTO system_logs (user_id, action, status,details)
+             VALUES ($1, $2, $3,$4)
              RETURNING id`,
             [
                 userId,
                 action.code,
-                action.status
+                action.status,
+                details
             ]
         )
         const {rows} = await db.query("SELECT name FROM users WHERE id=$1",[userId])
@@ -20,7 +21,7 @@ export const log = async (io,action,userId=null) => {
             user: user.name,
             action: action.code,
             status: action.status,
-            message: LogMessageMap[action.code] || action.code,
+            message: LogMap[action.code]?.format(details) || action.code,
             timestamp: new Date(),
         };
 

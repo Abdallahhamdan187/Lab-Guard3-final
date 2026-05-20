@@ -1,6 +1,6 @@
 import {db} from "../db/connection.js";
 import {parseLimit} from "../utils/queryHelpers.js";
-import {LogMessageMap} from "../constants/logActions.js";
+import {LogMap} from "../constants/logActions.js";
 
 export const getLogs = async (req, res) => {
 
@@ -36,7 +36,7 @@ export const getLogs = async (req, res) => {
 
         const newRows = rows.map(log => ({
             ...log,
-            message: LogMessageMap[log.action] || log.action
+            message: LogMap[log.action]?.format(log.details ?? {}) || log.action
         }));
 
         res.json(newRows);

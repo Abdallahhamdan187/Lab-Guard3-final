@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getUserSession, setUserSession } from "@/utils/auth";
+import api from "@/api.js";
 import { toast } from "sonner";
 
 function PasswordStrength({ password }) {
@@ -12,16 +13,16 @@ function PasswordStrength({ password }) {
     { label: "At least 8 characters", pass: password.length >= 8 },
     { label: "Contains uppercase letter", pass: /[A-Z]/.test(password) },
     { label: "Contains lowercase letter", pass: /[a-z]/.test(password) },
-    { label: "Contains a number",         pass: /[0-9]/.test(password) },
-    { label: "Contains special character",pass: /[^A-Za-z0-9]/.test(password) },
+    { label: "Contains a number", pass: /[0-9]/.test(password) },
+    { label: "Contains special character", pass: /[^A-Za-z0-9]/.test(password) },
   ];
   const score = checks.filter(c => c.pass).length;
   const levels = [
-    { label: "Too weak",  color: "bg-red-500",    text: "text-red-600"    },
-    { label: "Weak",      color: "bg-orange-500",  text: "text-orange-600" },
-    { label: "Fair",      color: "bg-yellow-500",  text: "text-yellow-600" },
-    { label: "Good",      color: "bg-blue-500",    text: "text-blue-600"   },
-    { label: "Strong",    color: "bg-green-500",   text: "text-green-600"  },
+    { label: "Too weak", color: "bg-red-500", text: "text-red-600" },
+    { label: "Weak", color: "bg-orange-500", text: "text-orange-600" },
+    { label: "Fair", color: "bg-yellow-500", text: "text-yellow-600" },
+    { label: "Good", color: "bg-blue-500", text: "text-blue-600" },
+    { label: "Strong", color: "bg-green-500", text: "text-green-600" },
   ];
   const level = levels[Math.max(0, score - 1)] || levels[0];
 
@@ -31,7 +32,7 @@ function PasswordStrength({ password }) {
     <div className="mt-3 space-y-2">
       {/* Strength bar */}
       <div className="flex gap-1">
-        {[1,2,3,4,5].map(i => (
+        {[1, 2, 3, 4, 5].map(i => (
           <div key={i} className={`h-1.5 flex-1 rounded-full transition-all ${i <= score ? level.color : "bg-gray-200"}`} />
         ))}
       </div>
@@ -81,14 +82,25 @@ export function ChangePassword() {
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
 
     setLoading(true);
-    await new Promise(r => setTimeout(r, 1000));
-
-    // Clear the mustChangePassword flag in session
-    setUserSession({ ...user, passwordChanged: true, mustChangePassword: false });
-
-    setLoading(false);
-    setSuccess(true);
-    toast.success("Password changed successfully!");
+    try {
+      // Call real API to change password
+      await api.post("/users/me/change-password", {
+        currentPassword: form.current,
+        newPassword: form.newPass,
+        confirmPassword: form.confirm
+      });
+      // Clear mustChangePassword flag in session so banner disappears
+      setUserSession({ ...user, passwordChanged: true, mustChangePassword: false });
+      setSuccess(true);
+      toast.success("Password changed successfully!");
+    } catch (err) {
+      console.log(err)
+      const msg = err.response?.data?.error || "Failed to change password";
+      setErrors({ current: msg });
+      toast.error(msg);
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (success) {
@@ -200,11 +212,10 @@ export function ChangePassword() {
                   placeholder="Re-enter your new password"
                   value={form.confirm}
                   onChange={e => set("confirm", e.target.value)}
-                  className={`pr-10 ${
-                    errors.confirm ? "border-red-400"
+                  className={`pr-10 ${errors.confirm ? "border-red-400"
                     : form.confirm && form.confirm === form.newPass ? "border-green-400"
-                    : ""
-                  }`}
+                      : ""
+                    }`}
                 />
                 <button type="button" onClick={() => toggleShow("confirm")}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">

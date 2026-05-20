@@ -1,16 +1,16 @@
 import jsPDF from 'jspdf';
 import * as XLSX from 'xlsx';
 
-const BRAND_RED  = [233, 51, 63];
-const DARK       = [44, 62, 80];
-const GRAY       = [100, 116, 139];
+const BRAND_RED = [233, 51, 63];
+const DARK = [44, 62, 80];
+const GRAY = [100, 116, 139];
 const LIGHT_GRAY = [248, 250, 252];
-const MID_GRAY   = [226, 232, 240];
-const WHITE      = [255, 255, 255];
-const GREEN      = [22, 163, 74];
-const AMBER      = [217, 119, 6];
-const BLUE       = [37, 99, 235];
-const RED_TEXT   = [220, 38, 38];
+const MID_GRAY = [226, 232, 240];
+const WHITE = [255, 255, 255];
+const GREEN = [22, 163, 74];
+const AMBER = [217, 119, 6];
+const BLUE = [37, 99, 235];
+const RED_TEXT = [220, 38, 38];
 
 /**
  * Draw a filled rectangle helper
@@ -42,18 +42,18 @@ export function exportToPDF(transactions, fileName = 'transactions.pdf', title =
 
   // Column definitions [label, x offset from ML, width]
   const cols = [
-    { label: 'Date',         x: 0,    w: 24 },
-    { label: 'Equipment',    x: 24,   w: 54 },
-    { label: 'Type',         x: 78,   w: 20 },
-    { label: 'Status',       x: 98,   w: 24 },
-    { label: 'Student Name', x: 122,  w: 40 },
-    { label: 'Uni Number',   x: 162,  w: 26 },
-    { label: 'Approved By',  x: 188,  w: 45 },
-    { label: 'Qty',          x: 233,  w: 14 },
+    { label: 'Date', x: 0, w: 24 },
+    { label: 'Equipment', x: 24, w: 54 },
+    { label: 'Type', x: 78, w: 20 },
+    { label: 'Status', x: 98, w: 24 },
+    { label: 'Student Name', x: 122, w: 40 },
+    { label: 'Uni Number', x: 162, w: 26 },
+    { label: 'Approved By', x: 188, w: 45 },
+    { label: 'Qty', x: 233, w: 14 },
   ];
 
-  const ROW_H   = 7;
-  const HEAD_H  = 8;
+  const ROW_H = 7;
+  const HEAD_H = 8;
   const HEADER_BAND = 26;
   const SUMMARY_BAND = 13;
   const TABLE_START_Y = HEADER_BAND + SUMMARY_BAND + 2;
@@ -85,7 +85,7 @@ export function exportToPDF(transactions, fileName = 'transactions.pdf', title =
     // Summary band (dark)
     fillRect(doc, 0, HEADER_BAND, PW, SUMMARY_BAND, DARK);
 
-    const statuses = ['Approved','Pending','Completed','Denied'];
+    const statuses = ['Approved', 'Pending', 'Completed', 'Denied'];
     const bW = PW / statuses.length;
     statuses.forEach((s, i) => {
       const cx = i * bW + bW / 2;
@@ -132,14 +132,14 @@ export function exportToPDF(transactions, fileName = 'transactions.pdf', title =
 
   // We'll collect all rows, paginate manually
   const allRows = transactions.map(txn => ({
-    date:       new Date(txn.requestDate).toLocaleDateString(),
-    equipment:  txn.equipmentName,
-    type:       txn.type,
-    status:     txn.status,
-    name:       txn.userName,
-    studentId:  txn.studentId || 'N/A',
+    date: txn.requestDate ? new Date(txn.requestDate).toLocaleDateString() : '—',
+    equipment: String(txn.equipmentName || '—'),
+    type: String(txn.type || '—'),
+    status: String(txn.status || '—'),
+    name: String(txn.userName || txn.user_name || txn.user?.name || txn.student?.name || txn.borrower?.name || '—'),
+    studentId: String(txn.studentId || txn.student_id || txn.universityId || txn.university_id || txn.universityNumber || txn.university_number || txn.uniNumber || txn.uni_number || txn.studentNumber || txn.user?.studentId || txn.user?.student_id || txn.user?.universityId || txn.student?.studentId || txn.student?.universityId || 'N/A'),
     approvedBy: txn.approvedBy || '—',
-    qty:        String(txn.quantity),
+    qty: String(txn.quantity || 0),
   }));
 
   const USABLE_H = PH - 9 - TABLE_START_Y - HEAD_H; // space per page for rows
@@ -171,23 +171,23 @@ export function exportToPDF(transactions, fileName = 'transactions.pdf', title =
 
     // Status color
     const statusColor = {
-      Approved:  GREEN,
-      Pending:   AMBER,
+      Approved: GREEN,
+      Pending: AMBER,
       Completed: BLUE,
-      Denied:    RED_TEXT,
+      Denied: RED_TEXT,
     }[row.status] || GRAY;
 
     doc.setFontSize(8);
 
     const cellValues = [
-      { text: row.date,       idx: 0, color: GRAY,        bold: false },
-      { text: row.equipment,  idx: 1, color: DARK,        bold: true  },
-      { text: row.type,       idx: 2, color: GRAY,        bold: false },
-      { text: row.status,     idx: 3, color: statusColor, bold: true  },
-      { text: row.name,       idx: 4, color: DARK,        bold: false },
-      { text: row.studentId,  idx: 5, color: GRAY,        bold: false },
-      { text: row.approvedBy, idx: 6, color: GRAY,        bold: false },
-      { text: row.qty,        idx: 7, color: DARK,        bold: true, center: true },
+      { text: row.date, idx: 0, color: GRAY, bold: false },
+      { text: row.equipment, idx: 1, color: DARK, bold: true },
+      { text: row.type, idx: 2, color: GRAY, bold: false },
+      { text: row.status, idx: 3, color: statusColor, bold: true },
+      { text: row.name, idx: 4, color: DARK, bold: false },
+      { text: row.studentId, idx: 5, color: GRAY, bold: false },
+      { text: row.approvedBy, idx: 6, color: GRAY, bold: false },
+      { text: row.qty, idx: 7, color: DARK, bold: true, center: true },
     ];
 
     cellValues.forEach(({ text, idx, color, bold, center }) => {
@@ -233,29 +233,35 @@ export function exportToExcel(transactions, fileName = 'transactions.xlsx', titl
   // Use array-of-arrays so column order is always guaranteed
   const headers = [
     'Date', 'Equipment', 'Type', 'Status',
-    'Quantity', 'Purpose', 'Approved By', 'Approval Date',
+    'Student Name', 'Uni Number', 'Quantity', 'Purpose',
+    'Expected Return', 'Approved By',
   ];
 
   const rows = transactions.map(txn => [
-    new Date(txn.requestDate).toLocaleDateString(),
-    txn.equipmentName,
-    txn.type,
-    txn.status,
-    txn.quantity,
-    txn.purpose,
-    txn.approvedBy || 'N/A',
-    txn.approvalDate ? new Date(txn.approvalDate).toLocaleDateString() : 'N/A',
+    txn.requestDate ? new Date(txn.requestDate).toLocaleDateString() : 'N/A',
+    txn.equipmentName || txn.equipment_name || txn.equipment?.name || 'N/A',
+    txn.type || 'N/A',
+    txn.status || 'N/A',
+    txn.userName || txn.user_name || txn.user?.name || txn.student?.name || 'N/A',
+    txn.studentId || txn.student_id || txn.universityId || txn.university_id || txn.universityNumber || txn.university_number || txn.uniNumber || txn.uni_number || txn.studentNumber || txn.user?.studentId || txn.user?.student_id || txn.user?.universityId || txn.student?.studentId || txn.student?.universityId || 'N/A',
+    txn.quantity || 0,
+    txn.purpose || 'N/A',
+    txn.expectedReturnDate || txn.expected_return_date || txn.dueDate
+      ? new Date(txn.expectedReturnDate || txn.expected_return_date || txn.dueDate).toLocaleDateString()
+      : 'N/A',
+    txn.approvedBy || txn.approved_by || txn.approvedByName || 'N/A',
   ]);
 
   const titleRow = [title];
-  const metaRow  = [`Generated: ${new Date().toLocaleString()} | Total: ${transactions.length} records`];
+  const metaRow = [`Generated: ${new Date().toLocaleString()} | Total: ${transactions.length} records`];
   const blankRow = [];
 
   const ws = XLSX.utils.aoa_to_sheet([titleRow, metaRow, blankRow, headers, ...rows]);
 
   ws['!cols'] = [
     { wch: 14 }, { wch: 36 }, { wch: 12 }, { wch: 12 },
-    { wch: 10 }, { wch: 42 }, { wch: 24 }, { wch: 16 },
+    { wch: 22 }, { wch: 16 }, { wch: 10 }, { wch: 40 },
+    { wch: 18 }, { wch: 24 },
   ];
 
   XLSX.utils.book_append_sheet(wb, ws, 'Transactions');

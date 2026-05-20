@@ -1,62 +1,28 @@
 import {db} from "../db/connection.js";
 import {
+    getInstructorStats,
     getEquipmentByCategoryData,
     getEquipmentByStatusData,
-    getEquipmentHealthData,
+    getEquipmentHealthData, getLabAssistantStats,
     getEquipmentUtilizationRateData,
-    getMostBorrowedEquipmentData,
+    getMostBorrowedEquipmentData, getAdminStats,
     getPeakRequestHoursData,
     getRequestStatusData, getUserDistributionData,
     getWeeklyRequestActivityData,
-    getWeeklyRequestApprovalActivityData
+    getWeeklyRequestApprovalActivityData, getStudentStats
 } from "../services/analytics.js";
 
 export const getStudentDashboardData = async (req, res) => {
     try {
 
-        const { rows: activeRows } = await db.query(`
-            SELECT COUNT(*) AS count
-            FROM transactions
-            WHERE type = 'borrow'
-            AND status = 'Approved'
-            AND return_date IS NULL
-        `);
-
-        const active = activeRows[0];
-
-        const { rows: pendingRows } = await db.query(`
-            SELECT COUNT(*) AS count
-            FROM transactions
-            WHERE status = 'Pending'
-        `);
-
-        const pending = pendingRows[0];
-
-        const { rows: returnedRows } = await db.query(`
-            SELECT COUNT(*) AS count
-            FROM transactions
-            WHERE status = 'Completed'
-        `);
-
-        const returned = returnedRows[0];
-
-        const { rows: equipmentRows } = await db.query(`
-            SELECT COUNT(*) AS count
-            FROM equipment
-            WHERE available_quantity > 0
-        `);
-
-        const equipment = equipmentRows[0];
+        const studentStats = await getStudentStats(req.userId)
 
         const weeklyActivity = await getWeeklyRequestActivityData();
 
         const equipmentByCategory = await getEquipmentByCategoryData();
 
         res.json({
-            activeBorrows: Number(active.count),
-            pendingRequests: Number(pending.count),
-            completedReturns: Number(returned.count),
-            availableEquipment: Number(equipment.count),
+            studentStats,
             weeklyActivity,
             equipmentByCategory
         });
@@ -69,16 +35,7 @@ export const getStudentDashboardData = async (req, res) => {
 export const getLabAssistantDashboardData = async (req, res) => {
     try {
 
-        const { rows: statsRows } = await db.query(`
-            SELECT
-                COUNT(*) AS total_equipment,
-                SUM(CASE WHEN status = 'Available' THEN 1 ELSE 0 END) AS available,
-                SUM(CASE WHEN status = 'Maintenance' THEN 1 ELSE 0 END) AS maintenance,
-                SUM(CASE WHEN status = 'In Use' THEN 1 ELSE 0 END) AS in_use
-            FROM equipment
-        `);
-
-        const stats = statsRows[0];
+        const labAssistantStats = await getLabAssistantStats()
 
         const { rows: labs } = await db.query(`
             SELECT 
@@ -92,10 +49,7 @@ export const getLabAssistantDashboardData = async (req, res) => {
         `);
 
         res.json({
-            totalEquipment: Number(stats.total_equipment),
-            available: Number(stats.available),
-            maintenance: Number(stats.maintenance),
-            inUse: Number(stats.in_use),
+            labAssistantStats,
             labs: labs.map(lab => ({
                 ...lab,
                 equipment_count: Number(lab.equipment_count)
@@ -117,16 +71,7 @@ export const getInstructorDashboardData = async (req, res) => {
         `);
 
         const students = studentRows[0];
-
-        const { rows: approvedRows } = await db.query(`
-            SELECT COUNT(*) AS count
-            FROM transactions
-            WHERE status = 'Approved'
-            AND approval_date::date = CURRENT_DATE
-        `);
-
-        const approvedToday = approvedRows[0];
-
+        const instructorStats = await getInstructorStats()
         const weeklyData = await getWeeklyRequestApprovalActivityData();
 
         const peakRequestHours = await getPeakRequestHoursData();
@@ -137,7 +82,7 @@ export const getInstructorDashboardData = async (req, res) => {
 
         res.json({
             totalStudents: Number(students.count),
-            approvedToday: Number(approvedToday.count),
+            instructorStats,
             weeklyData,
             peakRequestHours,
             equipmentUsage,
@@ -152,20 +97,7 @@ export const getInstructorDashboardData = async (req, res) => {
 export const getAdminDashboardData = async (req, res) => {
     try {
 
-        const [
-            usersResult,
-            equipmentResult,
-            transactionsResult
-        ] = await Promise.all([
-            db.query("SELECT COUNT(*) AS count FROM users"),
-            db.query("SELECT COUNT(*) AS count FROM equipment"),
-            db.query("SELECT COUNT(*) AS count FROM transactions")
-        ]);
-
-        const users = usersResult.rows[0];
-        const equipment = equipmentResult.rows[0];
-        const transactions = transactionsResult.rows[0];
-
+        const adminStats = await getAdminStats()
         const [
             usersGrowthResult,
             transactionsGrowthResult,
@@ -260,9 +192,7 @@ export const getAdminDashboardData = async (req, res) => {
         const equipmentHealth = await getEquipmentHealthData();
 
         res.json({
-            totalUsers: Number(users.count),
-            totalEquipment: Number(equipment.count),
-            totalTransactions: Number(transactions.count),
+            adminStats,
             systemGrowth: Object.values(systemGrowth),
             statusData,
             borrowData,

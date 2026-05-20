@@ -1,5 +1,5 @@
 import {db} from "../db/connection.js";
-
+import { calculatePercentageChange } from "../utils/stats.js";
 export const getEquipmentByStatusData = async () => {
     const { rows } = await db.query(`
         SELECT 
@@ -91,7 +91,7 @@ export const getEquipmentUtilizationRateData = async () => {
             e.name,
             CASE 
                 WHEN e.total_quantity = 0 THEN 0
-                ELSE (e.total_quantity - e.available_quantity) * 100.0 / e.total_quantity
+                ELSE ROUND((e.total_quantity - e.available_quantity) * 100.0 / e.total_quantity,2)
             END AS utilization
         FROM equipment e
     `);
@@ -236,7 +236,7 @@ export const getWeeklyRequestApprovalActivityData = async () => {
         SELECT 
             TO_CHAR(request_date, 'Dy') AS day,
             COUNT(*) AS requests,
-            COUNT(*) FILTER (WHERE status = 'Approved') AS approvals,
+            COUNT(*) FILTER (WHERE approval_date IS NOT NULL) AS approvals,
             COUNT(*) FILTER (WHERE status = 'Denied') AS denials
         FROM transactions
         WHERE request_date >= NOW() - INTERVAL '7 days'
@@ -245,4 +245,399 @@ export const getWeeklyRequestApprovalActivityData = async () => {
     `);
 
     return rows;
+};
+
+
+
+export const getStudentStats = async (userId) => {
+
+    const [
+        activeResult,
+        activeCurrentMonthResult,
+        activePreviousMonthResult,
+
+        completedResult,
+        completedCurrentMonthResult,
+        completedPreviousMonthResult,
+
+        equipmentResult,
+        pendingResult
+    ] = await Promise.all([
+
+        // Active borrows
+        db.query(`
+            SELECT COUNT(*) AS count
+            FROM transactions
+            WHERE type = 'Borrow'
+            AND status = 'Approved'
+            AND return_date IS NULL
+        `),
+
+        // Active borrows this month
+        db.query(`
+            SELECT COUNT(*) AS count
+            FROM transactions
+            WHERE approval_date IS NOT NULL
+            AND DATE_TRUNC('month', request_date) =
+                DATE_TRUNC('month', CURRENT_DATE)
+        `),
+
+        // Active borrows last month
+        db.query(`
+            SELECT COUNT(*) AS count
+            FROM transactions
+            WHERE approval_date IS NOT NULL
+            AND DATE_TRUNC('month', request_date) =
+                DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month')
+        `),
+
+        // Completed returns total
+        db.query(`
+            SELECT COUNT(*) AS count
+            FROM transactions
+            WHERE status = 'Completed'
+        `),
+
+        // Completed returns this month
+        db.query(`
+            SELECT COUNT(*) AS count
+            FROM transactions
+            WHERE status = 'Completed'
+            AND DATE_TRUNC('month', return_date) =
+                DATE_TRUNC('month', CURRENT_DATE)
+        `),
+
+        // Completed returns last month
+        db.query(`
+            SELECT COUNT(*) AS count
+            FROM transactions
+            WHERE status = 'Completed'
+            AND DATE_TRUNC('month', return_date) =
+                DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month')
+        `),
+
+        // Available equipment
+        db.query(`
+            SELECT COUNT(*) AS count
+            FROM equipment
+            WHERE available_quantity > 0
+        `),
+
+        // Pending requests for current user
+        db.query(`
+            SELECT COUNT(*) AS count
+            FROM transactions
+            WHERE status = 'Pending'
+            AND user_id = $1
+        `, [userId])
+    ]);
+
+    const activeCurrentMonth =
+        Number(activeCurrentMonthResult.rows[0].count);
+
+    const activePreviousMonth =
+        Number(activePreviousMonthResult.rows[0].count);
+
+    const activeBorrowsChangePercent =
+        calculatePercentageChange(
+            activeCurrentMonth,
+            activePreviousMonth
+        );
+
+    const completedCurrentMonth =
+        Number(completedCurrentMonthResult.rows[0].count);
+
+    const completedPreviousMonth =
+        Number(completedPreviousMonthResult.rows[0].count);
+
+    const completedReturnsChangePercent =
+        calculatePercentageChange(
+            completedCurrentMonth,
+            completedPreviousMonth
+        );
+
+    return {
+
+        activeBorrows: {
+            count: Number(activeResult.rows[0].count),
+            changePercent: activeBorrowsChangePercent,
+            isPositive: activeBorrowsChangePercent >= 0
+        },
+
+        completedReturns: {
+            count: Number(completedResult.rows[0].count),
+            changePercent: completedReturnsChangePercent,
+            isPositive: completedReturnsChangePercent >= 0
+        },
+
+        availableEquipment: {
+            count: Number(equipmentResult.rows[0].count),
+            changePercent: 0,
+            isPositive: true
+        },
+
+        pendingRequests: {
+            count: Number(pendingResult.rows[0].count),
+            changePercent: 0,
+            isPositive: true
+        },
+
+        comparisonPeriod: "vs last month"
+    };
+};
+
+export const getInstructorStats = async () => {
+
+    const [
+        todayResult,
+        currentMonthResult,
+        previousMonthResult
+    ] = await Promise.all([
+
+        // Approved today
+        db.query(`
+            SELECT COUNT(*) AS count
+            FROM transactions
+            WHERE approval_date IS NOT NULL
+            AND approval_date::date = CURRENT_DATE
+        `),
+
+        // Approved this month
+        db.query(`
+            SELECT COUNT(*) AS count
+            FROM transactions
+            WHERE approval_date IS NOT NULL
+            AND DATE_TRUNC('month', approval_date) =
+                DATE_TRUNC('month', CURRENT_DATE)
+        `),
+
+        // Approved last month
+        db.query(`
+            SELECT COUNT(*) AS count
+            FROM transactions
+            WHERE approval_date IS NOT NULL
+            AND DATE_TRUNC('month', approval_date) =
+                DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month')
+        `)
+    ]);
+
+    const approvedToday =
+        Number(todayResult.rows[0].count);
+
+    const currentMonth =
+        Number(currentMonthResult.rows[0].count);
+
+    const previousMonth =
+        Number(previousMonthResult.rows[0].count);
+
+    const approvedChangePercent =
+        calculatePercentageChange(
+            currentMonth,
+            previousMonth
+        );
+
+    return {
+        approvedToday: {
+            count: approvedToday,
+            changePercent: approvedChangePercent,
+            isPositive: approvedChangePercent >= 0
+        },
+    };
+};
+
+export const getLabAssistantStats = async () => {
+
+    const [
+        statsResult,
+        currentMonthResult,
+        previousMonthResult
+    ] = await Promise.all([
+
+        // Current equipment stats
+        db.query(`
+            SELECT
+                COUNT(*) AS total_equipment,
+                SUM(CASE WHEN status = 'Available' THEN 1 ELSE 0 END) AS available,
+                SUM(CASE WHEN status = 'Maintenance' THEN 1 ELSE 0 END) AS maintenance,
+                SUM(CASE WHEN status = 'In Use' THEN 1 ELSE 0 END) AS in_use
+            FROM equipment
+        `),
+
+        // Equipment added this month
+        db.query(`
+            SELECT COUNT(*) AS count
+            FROM equipment
+            WHERE DATE_TRUNC('month', created_at) =
+                DATE_TRUNC('month', CURRENT_DATE)
+        `),
+
+        // Equipment added last month
+        db.query(`
+            SELECT COUNT(*) AS count
+            FROM equipment
+            WHERE DATE_TRUNC('month', created_at) =
+                DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month')
+        `)
+    ]);
+
+    const stats = statsResult.rows[0];
+
+    const currentMonth =
+        Number(currentMonthResult.rows[0].count);
+
+    const previousMonth =
+        Number(previousMonthResult.rows[0].count);
+
+    const equipmentChangePercent =
+        calculatePercentageChange(
+            currentMonth,
+            previousMonth
+        );
+
+    return {
+
+        totalEquipment: {
+            count: Number(stats.total_equipment),
+            changePercent: equipmentChangePercent,
+            isPositive: equipmentChangePercent >= 0
+        },
+
+        available: {
+            count: Number(stats.available),
+            changePercent: 0,
+            isPositive: true
+        },
+
+        maintenance: {
+            count: Number(stats.maintenance),
+            changePercent: 0,
+            isPositive: true
+        },
+
+        inUse: {
+            count: Number(stats.in_use),
+            changePercent: 0,
+            isPositive: true
+        },
+    };
+};
+
+
+export const getAdminStats = async () => {
+
+    const [
+        usersResult,
+        equipmentResult,
+        transactionsResult,
+
+        currentUsersMonthResult,
+        previousUsersMonthResult,
+
+        currentEquipmentMonthResult,
+        previousEquipmentMonthResult,
+
+        currentTransactionsMonthResult,
+        previousTransactionsMonthResult
+    ] = await Promise.all([
+
+        // Total counts
+        db.query(`
+            SELECT COUNT(*) AS count
+            FROM users
+        `),
+
+        db.query(`
+            SELECT COUNT(*) AS count
+            FROM equipment
+        `),
+
+        db.query(`
+            SELECT COUNT(*) AS count
+            FROM transactions
+        `),
+
+        // Users this month
+        db.query(`
+            SELECT COUNT(*) AS count
+            FROM users
+            WHERE DATE_TRUNC('month', created_at) =
+                DATE_TRUNC('month', CURRENT_DATE)
+        `),
+
+        // Users last month
+        db.query(`
+            SELECT COUNT(*) AS count
+            FROM users
+            WHERE DATE_TRUNC('month', created_at) =
+                DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month')
+        `),
+
+        // Equipment this month
+        db.query(`
+            SELECT COUNT(*) AS count
+            FROM equipment
+            WHERE DATE_TRUNC('month', created_at) =
+                DATE_TRUNC('month', CURRENT_DATE)
+        `),
+
+        // Equipment last month
+        db.query(`
+            SELECT COUNT(*) AS count
+            FROM equipment
+            WHERE DATE_TRUNC('month', created_at) =
+                DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month')
+        `),
+
+        // Transactions this month
+        db.query(`
+            SELECT COUNT(*) AS count
+            FROM transactions
+            WHERE DATE_TRUNC('month', request_date) =
+                DATE_TRUNC('month', CURRENT_DATE)
+        `),
+
+        // Transactions last month
+        db.query(`
+            SELECT COUNT(*) AS count
+            FROM transactions
+            WHERE DATE_TRUNC('month', request_date) =
+                DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month')
+        `)
+    ]);
+
+    const usersChangePercent = calculatePercentageChange(
+        Number(currentUsersMonthResult.rows[0].count),
+        Number(previousUsersMonthResult.rows[0].count)
+    );
+
+    const equipmentChangePercent = calculatePercentageChange(
+        Number(currentEquipmentMonthResult.rows[0].count),
+        Number(previousEquipmentMonthResult.rows[0].count)
+    );
+
+    const transactionsChangePercent = calculatePercentageChange(
+        Number(currentTransactionsMonthResult.rows[0].count),
+        Number(previousTransactionsMonthResult.rows[0].count)
+    );
+
+    return {
+        users: {
+            count: Number(usersResult.rows[0].count),
+            changePercent: usersChangePercent,
+            isPositive: usersChangePercent >= 0
+        },
+
+        equipment: {
+            count: Number(equipmentResult.rows[0].count),
+            changePercent: equipmentChangePercent,
+            isPositive: equipmentChangePercent >= 0
+        },
+
+        transactions: {
+            count: Number(transactionsResult.rows[0].count),
+            changePercent: transactionsChangePercent,
+            isPositive: transactionsChangePercent >= 0
+        },
+
+    };
 };

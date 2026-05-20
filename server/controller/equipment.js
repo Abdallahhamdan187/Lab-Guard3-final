@@ -1,6 +1,8 @@
 import {db} from "../db/connection.js";
 import camelcaseKeys from "camelcase-keys";
 import {EQUIPMENT_STATUS} from "../constants/equipmentStatus.js";
+import {log} from "../utils/logger.js";
+import {LOG_ACTIONS} from "../constants/logActions.js";
 
 export const getEquipment = async (req, res) => {
     try {
@@ -211,10 +213,11 @@ export const addEquipment = async (req, res) => {
                 description
             ]
         );
-
+        const equipmentId = result.rows[0].id
+        await log(req.io, LOG_ACTIONS.ADD_EQUIPMENT, req.user.id, {equipmentId,equipmentName: name})
         res.status(201).json({
             message: "Created equipment successfully",
-            equipmentId: result.rows[0].id
+            equipmentId
         });
 
     } catch (err) {
@@ -240,7 +243,7 @@ export const updateEquipment = async (req, res) => {
     try {
 
         const result = await db.query(
-            "UPDATE equipment SET status = $1 WHERE id = $2",
+            "UPDATE equipment SET status = $1 WHERE id = $2 RETURNING id,name",
             [status, id]
         );
 
@@ -249,7 +252,11 @@ export const updateEquipment = async (req, res) => {
                 error: "Equipment not found"
             });
         }
-
+        log(req.io,LOG_ACTIONS.UPDATE_EQUIPMENT,req.user.id,{
+            id: result.rows[0].id,
+            equipmentName: result.rows[0].name,
+            newStatus: status
+        })
         res.json({
             message: "Equipment updated successfully"
         });
@@ -260,5 +267,44 @@ export const updateEquipment = async (req, res) => {
             error: err.message
         });
 
+    }
+};
+
+export const deleteEquipment = async (req, res) => {
+
+    const { id } = req.params;
+
+    try {
+        const { rows: activeRows } = await db.query(
+            `SELECT id FROM transactions
+             WHERE equipment_id = $1
+             AND status IN ('Pending', 'Approved')
+             LIMIT 1`,
+            [id]
+        );
+
+        if (activeRows.length > 0) {
+            return res.status(400).json({
+                error: "Cannot delete equipment with active borrow requests"
+            });
+        }
+
+        const result = await db.query(
+            "DELETE FROM equipment WHERE id = $1 RETURNING name",
+            [id]
+        );
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ error: "Equipment not found" });
+        }
+
+        await log(req.io, LOG_ACTIONS.DELETE_EQUIPMENT, req.user?.id || null,{
+            equipmentName: result.rows[0].name
+        });
+
+        res.json({ message: `Equipment "${result.rows[0].name}" deleted successfully` });
+
+    } catch (err) {
+        res.status(500).json({ error: err.message });
     }
 };

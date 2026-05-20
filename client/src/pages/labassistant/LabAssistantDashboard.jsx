@@ -1,4 +1,4 @@
-import { Package, AlertCircle, Wrench, CheckCircle, MapPin, Search, Plus } from "lucide-react";
+import { Package, AlertCircle, Wrench, CheckCircle, MapPin, Search, Plus, Trash2, AlertTriangle, X } from "lucide-react";
 import { StatCard } from "@/components/shared/StatCard";
 import { mockEquipment } from "@/data/mockData";
 import { Button } from "@/components/ui/button";
@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
-import {useEffect, useState} from "react";
+import { useEffect, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -20,33 +20,61 @@ export function LabAssistantDashboard() {
   const [maintenanceNotes, setMaintenanceNotes] = useState("");
   const [newStatus, setNewStatus] = useState("");
   const [showAddModal, setShowAddModal] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(null); // { id, name }
   const [stats, setStats] = useState(null);
   const [equipment, setEquipment] = useState([]);
-  const fetchStats = async () =>{
-    try{
+  const fetchStats = async () => {
+    try {
       const res = await api.get("/dashboard/lab-assistant")
       setStats(res.data)
-    }catch (err) {
-      console.log("Lab Assistant Stats Error",err)
+    } catch (err) {
+      console.log("Lab Assistant Stats Error", err)
     }
   }
-  const fetchEquipment = async () =>{
-    try{
+  const fetchEquipment = async () => {
+    try {
       const res = await api.get("/equipment")
       setEquipment(res.data)
-    }catch (err) {
-      console.log("Lab Assistant Equipment Error",err)
+    } catch (err) {
+      console.log("Lab Assistant Equipment Error", err)
     }
   }
-  useEffect(()=>{
+  useEffect(() => {
     fetchStats()
     fetchEquipment()
-  },[])
+  }, [])
+  const labAssistantStats = stats?.labAssistantStats
+  const totalEquipment = labAssistantStats?.totalEquipment.count || 0;
+  const availableCount = labAssistantStats?.available.count || 0;
+  const maintenanceCount = labAssistantStats?.maintenance.count || 0;
+  const inUseCount = labAssistantStats?.inUse.count || 0
 
-  const totalEquipment = stats?.totalEquipment || 0;
-  const availableCount = stats?.available || 0;
-  const maintenanceCount = stats?.maintenance || 0;
-  const inUseCount = stats?.inUse || 0
+  const handleDelete = (id, name) => {
+    setConfirmDelete({ id, name });
+  };
+
+  const handleConfirmedDelete = async () => {
+    if (!confirmDelete) return;
+    const { id, name } = confirmDelete;
+    setConfirmDelete(null);
+    try {
+      // Try standard REST delete endpoint
+      await api.delete(`/equipment/${id}`);
+      setEquipment(prev => prev.filter(e => e.id !== id && e._id !== id));
+      await fetchStats()
+      toast.success(`"${name}" deleted from inventory.`);
+    } catch (err) {
+      const status = err?.response?.status;
+      if (status === 404) {
+        toast.error(`Delete endpoint not found. Ask your backend developer to add: DELETE /api/equipment/:id`);
+      } else if (status === 403) {
+        toast.error("You don't have permission to delete equipment.");
+      } else {
+        toast.error(`Failed to delete "${name}". ${err?.response?.data?.message || err.message || ""}`);
+      }
+      console.error("Delete equipment error:", err?.response?.data || err);
+    }
+  };
 
   const filteredEquipment = equipment.filter(e =>
     e.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -67,9 +95,9 @@ export function LabAssistantDashboard() {
       await fetchStats()
       await fetchEquipment()
       toast.success(`Equipment status updated to ${newStatus}`);
-    }catch (err) {
-      console.log("Update Status Error",err)
-    }finally {
+    } catch (err) {
+      console.log("Update Status Error", err)
+    } finally {
       setSelectedEquipment(null);
       setMaintenanceNotes("");
       setNewStatus("");
@@ -93,6 +121,46 @@ export function LabAssistantDashboard() {
 
   return (
     <div className="p-6 space-y-6 bg-gray-50 min-h-screen">
+
+      {/* Delete Confirmation Modal */}
+      {confirmDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 bg-gradient-to-r from-red-700 to-red-600">
+              <div className="flex items-center gap-2">
+                <AlertTriangle size={18} className="text-white" />
+                <h2 className="text-base font-bold text-white">Delete Equipment</h2>
+              </div>
+              <button onClick={() => setConfirmDelete(null)} className="text-white hover:bg-white/20 p-1 rounded-full">
+                <X size={16} />
+              </button>
+            </div>
+            <div className="p-6">
+              <p className="text-sm text-gray-700 leading-relaxed">
+                Are you sure you want to delete{" "}
+                <span className="font-semibold text-gray-900">"{confirmDelete.name}"</span>{" "}
+                from the inventory?
+              </p>
+              <p className="text-xs text-red-600 mt-2 flex items-center gap-1.5">
+                <AlertTriangle size={12} /> This action cannot be undone.
+              </p>
+            </div>
+            <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex gap-3 justify-end">
+              <Button variant="outline" size="sm" onClick={() => setConfirmDelete(null)}>
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleConfirmedDelete}
+                className="bg-red-600 hover:bg-red-700 text-white gap-1.5"
+              >
+                <Trash2 size={14} /> Delete
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Add Equipment Modal */}
       <AddEquipmentModal
         open={showAddModal}
@@ -121,13 +189,13 @@ export function LabAssistantDashboard() {
           value={totalEquipment}
           icon={Package}
           color="#3498db"
+          trend={{ value: String(labAssistantStats?.totalEquipment.changePercent ?? 0) + "%", isPositive: labAssistantStats?.totalEquipment.isPositive ?? false }}
         />
         <StatCard
           title="Available"
           value={availableCount}
           icon={CheckCircle}
           color="#27ae60"
-          trend={{ value: "8%", isPositive: true }}
         />
         <StatCard
           title="In Maintenance"
@@ -216,17 +284,27 @@ export function LabAssistantDashboard() {
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        setSelectedEquipment(equipment);
-                        setNewStatus(equipment.status);
-                      }}
-                      className="text-[#e9333f] border-[#e9333f] hover:bg-[#e9333f] hover:text-white"
-                    >
-                      Update Status
-                    </Button>
+                    <div className="flex items-center justify-end gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setSelectedEquipment(equipment);
+                          setNewStatus(equipment.status);
+                        }}
+                        className="text-[#e9333f] border-[#e9333f] hover:bg-[#e9333f] hover:text-white"
+                      >
+                        Update Status
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleDelete(equipment.id, equipment.name)}
+                        className="text-red-600 border-red-300 hover:bg-red-600 hover:text-white"
+                      >
+                        <Trash2 size={13} />
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
@@ -243,13 +321,13 @@ export function LabAssistantDashboard() {
             {
               stats?.labs?.map((lab) => {
                 return (
-                    <div key={lab.name} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                      <div className="flex items-center gap-2">
-                        <MapPin size={16} className="text-gray-400" />
-                        <span className="text-sm font-medium text-gray-900">{lab.name}</span>
-                      </div>
-                      <Badge variant="outline">{lab.equipment_count} items</Badge>
+                  <div key={lab.name} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div className="flex items-center gap-2">
+                      <MapPin size={16} className="text-gray-400" />
+                      <span className="text-sm font-medium text-gray-900">{lab.name}</span>
                     </div>
+                    <Badge variant="outline">{lab.equipment_count} items</Badge>
+                  </div>
                 );
               })}
           </div>

@@ -1,6 +1,8 @@
 import {db} from "../db/connection.js";
 import {parseLimit} from "../utils/queryHelpers.js";
 import bcrypt from "bcrypt";
+import {LOG_ACTIONS} from "../constants/logActions.js";
+import {log} from "../utils/logger.js";
 
 
 export const getUsers = async (req, res) => {
@@ -115,9 +117,10 @@ export const register = async (req, res) => {
                 password,
                 role,
                 department,
-                student_id
+                student_id,
+                must_change_password
             )
-            VALUES ($1, $2, $3, $4, $5, $6)
+            VALUES ($1, $2, $3, $4, $5, $6,TRUE)
             `,
             [
                 name,
@@ -125,10 +128,12 @@ export const register = async (req, res) => {
                 hashedPassword,
                 role,
                 department,
-                student_id
+                student_id,
             ]
         );
-
+        log(req.io,LOG_ACTIONS.REGISTER_USER,req.user.id,{
+            user: name
+        })
         res.json({
             message: "User created"
         });
@@ -141,3 +146,48 @@ export const register = async (req, res) => {
 
     }
 };
+
+export const changePassword = async (req,res) => {
+    const userId = req.user.id
+    const {currentPassword,newPassword,confirmPassword} = req.body
+    try{
+        if (!currentPassword){
+            return res.status(400).json({error: "Missing Field: Current Password"})
+        }
+        if (!newPassword){
+            return res.status(400).json({error: "Missing Field: New Password"})
+        }
+        if (!confirmPassword){
+            return res.status(400).json({error: "Missing Field: Confirm Password"})
+        }
+        const {rows} = await db.query(
+            "SELECT password FROM users WHERE id=$1",
+            [userId]
+        )
+        const user = rows[0]
+        if(!user){
+            return res.status(404).json({error: "User not found"})
+        }
+        const isMatch = await bcrypt.compare(currentPassword,user.password)
+        if (!isMatch){
+            return res.status(400).json({error: "Current password is incorrect"})
+        }
+        if (newPassword !== confirmPassword){
+            return res.status(400).json({error: "New password does not match confirm password"})
+        }
+
+        if (currentPassword === newPassword) {
+            return res.status(400).json({error: "New password must be different from current password"});
+        }
+
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+        await db.query(
+            "UPDATE users SET password=$1,must_change_password=FALSE WHERE id=$2",
+            [hashedPassword,userId]
+        )
+        log(req.io,LOG_ACTIONS.CHANGE_PASSWORD,userId)
+        res.json({ message: "Password changed successfully." });
+    }catch (err) {
+        res.status(500).json({error: err.message});
+    }
+}

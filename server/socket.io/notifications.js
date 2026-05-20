@@ -14,7 +14,6 @@ export const registerNotificationSocket = (server) => {
     io.use((socket, next) => {
 
         try {
-
             const token = socket.handshake.auth?.token;
             if (!token) {
                 return next(new Error("Unauthorized"));
@@ -34,9 +33,7 @@ export const registerNotificationSocket = (server) => {
             next();
 
         } catch (err) {
-
             next(new Error("Authentication failed"));
-
         }
     });
 
@@ -52,12 +49,11 @@ export const registerNotificationSocket = (server) => {
             socket.join(ADMIN_ROOM);
             console.log("Admin joined admin room");
         }
-        socket.on("disconnect", (reason) => {
 
+        socket.on("disconnect", (reason) => {
             console.log(
                 `User ${userId} disconnected (${reason})`
             );
-
         });
     });
 

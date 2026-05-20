@@ -21,9 +21,8 @@ import {authMiddleware} from "./middleware/auth.js";
 import http from "http";
 import {registerNotificationSocket} from "./socket.io/notifications.js";
 import {processDueDateNotifications, sendNotification} from "./utils/notifications.js";
-import {NOTIFICATION_TYPES} from "./constants/notificationTypes.js";
-import {log} from "./utils/logger.js";
-import {LOG_ACTIONS} from "./constants/logActions.js";
+import {CheckPasswordChange} from "./middleware/checkPasswordChange.js";
+
 const TEST_USER_ID = 1;
 const server = http.createServer(app);
 
@@ -37,7 +36,7 @@ app.use((req, res, next) => {
 
 app.use("/api/auth", authRoutes);
 
-app.use("/api",authMiddleware)
+app.use("/api",authMiddleware,CheckPasswordChange)
 
 app.use("/api/dashboard", dashboardRoutes);
 

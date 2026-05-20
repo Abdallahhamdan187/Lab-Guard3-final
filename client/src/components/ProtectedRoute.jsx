@@ -7,6 +7,10 @@ export function ProtectedRoute({ children, allowedRoles }) {
         return <Navigate to="/login" replace />;
     }
 
+    if (user.mustChangePassword){
+        return <Navigate to="/change-password" replace />;
+    }
+
     if (allowedRoles && !allowedRoles.includes(user.role)) {
         return <Navigate to="/" replace />;
     }
