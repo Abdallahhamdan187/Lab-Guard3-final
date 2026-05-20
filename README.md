@@ -13,7 +13,7 @@
 
 Open pgAdmin 4, copy the SQL from [database.sql](https://github.com/ZaidHawari/Lab-Guard3/blob/main/database/database.sql), and run it.
 
-You can also copy and run the SQL queries from [data.txt](https://github.com/ZaidHawari/Lab-Guard3/blob/main/database/data.txt) to populate the database with mock data.
+You can also copy and run the SQL queries from [data.txt](https://github.com/ZaidHawari/Lab-Guard3/blob/main/database/data.txt) to populate the database with sample data.
 
 ---
 
