@@ -21,6 +21,8 @@ export function LabAssistantDashboard() {
   const [newStatus, setNewStatus] = useState("");
   const [showAddModal, setShowAddModal] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(null); // { id, name }
+  const [quantityEquipment, setQuantityEquipment] = useState(null); // equipment being edited
+  const [newTotalQty, setNewTotalQty] = useState(0);
   const [stats, setStats] = useState(null);
   const [equipment, setEquipment] = useState([]);
   const fetchStats = async () => {
@@ -43,11 +45,11 @@ export function LabAssistantDashboard() {
     fetchStats()
     fetchEquipment()
   }, [])
-  const labAssistantStats = stats?.labAssistantStats
-  const totalEquipment = labAssistantStats?.totalEquipment.count || 0;
-  const availableCount = labAssistantStats?.available.count || 0;
-  const maintenanceCount = labAssistantStats?.maintenance.count || 0;
-  const inUseCount = labAssistantStats?.inUse.count || 0
+
+  const totalEquipment = stats?.totalEquipment || 0;
+  const availableCount = stats?.available || 0;
+  const maintenanceCount = stats?.maintenance || 0;
+  const inUseCount = stats?.inUse || 0
 
   const handleDelete = (id, name) => {
     setConfirmDelete({ id, name });
@@ -61,7 +63,6 @@ export function LabAssistantDashboard() {
       // Try standard REST delete endpoint
       await api.delete(`/equipment/${id}`);
       setEquipment(prev => prev.filter(e => e.id !== id && e._id !== id));
-      await fetchStats()
       toast.success(`"${name}" deleted from inventory.`);
     } catch (err) {
       const status = err?.response?.status;
@@ -101,6 +102,35 @@ export function LabAssistantDashboard() {
       setSelectedEquipment(null);
       setMaintenanceNotes("");
       setNewStatus("");
+    }
+  };
+
+  const handleUpdateQuantity = async () => {
+    if (!quantityEquipment) return;
+    if (newTotalQty < 1) {
+      toast.error("Total quantity must be at least 1");
+      return;
+    }
+    const currentlyInUse = quantityEquipment.totalQuantity - quantityEquipment.availableQuantity;
+    if (newTotalQty < currentlyInUse) {
+      toast.error(`Cannot set total below ${currentlyInUse} — that many units are currently in use`);
+      return;
+    }
+    try {
+      await api.patch("/equipment/update", {
+        id: quantityEquipment.id,
+        totalQuantity: newTotalQty,
+        availableQuantity: newTotalQty - currentlyInUse,
+      });
+      await fetchEquipment();
+      await fetchStats();
+      toast.success(`Quantity updated to ${newTotalQty}`);
+    } catch (err) {
+      toast.error(`Failed to update quantity. ${err?.response?.data?.message || err.message || ""}`);
+      console.error("Update quantity error:", err);
+    } finally {
+      setQuantityEquipment(null);
+      setNewTotalQty(0);
     }
   };
 
@@ -168,6 +198,89 @@ export function LabAssistantDashboard() {
         onAdd={newEq => setEquipment(prev => [newEq, ...prev])}
       />
 
+      {/* Update Quantity Modal */}
+      {quantityEquipment && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 bg-gradient-to-r from-[#2c3e50] to-[#34495e]">
+              <div className="flex items-center gap-2">
+                <Package size={18} className="text-white" />
+                <h2 className="text-base font-bold text-white">Update Quantity</h2>
+              </div>
+              <button onClick={() => setQuantityEquipment(null)} className="text-white hover:bg-white/20 p-1 rounded-full">
+                <X size={16} />
+              </button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <p className="text-sm font-semibold text-gray-900">{quantityEquipment.name}</p>
+                <p className="text-xs text-gray-500 font-mono mt-0.5">{quantityEquipment.serialNumber}</p>
+              </div>
+              <div className="bg-gray-50 rounded-xl p-4 border border-gray-200 space-y-1.5 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Current total</span>
+                  <span className="font-semibold text-gray-900">{quantityEquipment.totalQuantity}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Currently in use</span>
+                  <span className="font-semibold text-blue-600">
+                    {quantityEquipment.totalQuantity - quantityEquipment.availableQuantity}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Currently available</span>
+                  <span className="font-semibold text-green-600">{quantityEquipment.availableQuantity}</span>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-semibold text-gray-700">New Total Quantity</Label>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => setNewTotalQty(q => Math.max(1, q - 1))}
+                    className="w-10 h-10 rounded-xl border border-gray-200 flex items-center justify-center text-lg font-bold text-gray-700 hover:bg-gray-100 transition-colors"
+                  >
+                    −
+                  </button>
+                  <input
+                    type="number"
+                    min={1}
+                    value={newTotalQty}
+                    onChange={e => setNewTotalQty(Math.max(1, parseInt(e.target.value) || 1))}
+                    className="flex-1 text-center text-xl font-bold text-gray-900 border border-gray-200 rounded-xl h-10 focus:outline-none focus:ring-2 focus:ring-[#e9333f]"
+                  />
+                  <button
+                    onClick={() => setNewTotalQty(q => q + 1)}
+                    className="w-10 h-10 rounded-xl border border-gray-200 flex items-center justify-center text-lg font-bold text-gray-700 hover:bg-gray-100 transition-colors"
+                  >
+                    +
+                  </button>
+                </div>
+                {newTotalQty !== quantityEquipment.totalQuantity && (
+                  <p className="text-xs text-center text-gray-500">
+                    Available after update:{" "}
+                    <span className="font-semibold text-green-600">
+                      {newTotalQty - (quantityEquipment.totalQuantity - quantityEquipment.availableQuantity)}
+                    </span>
+                  </p>
+                )}
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex gap-3">
+              <Button variant="outline" className="flex-1" onClick={() => setQuantityEquipment(null)}>
+                Cancel
+              </Button>
+              <Button
+                className="flex-1 bg-[#e9333f] hover:bg-[#d12233] text-white"
+                onClick={handleUpdateQuantity}
+                disabled={newTotalQty === quantityEquipment.totalQuantity}
+              >
+                Save Changes
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
         <div>
@@ -189,13 +302,13 @@ export function LabAssistantDashboard() {
           value={totalEquipment}
           icon={Package}
           color="#3498db"
-          trend={{ value: String(labAssistantStats?.totalEquipment.changePercent ?? 0) + "%", isPositive: labAssistantStats?.totalEquipment.isPositive ?? false }}
         />
         <StatCard
           title="Available"
           value={availableCount}
           icon={CheckCircle}
           color="#27ae60"
+          trend={{ value: "8%", isPositive: true }}
         />
         <StatCard
           title="In Maintenance"
@@ -295,6 +408,18 @@ export function LabAssistantDashboard() {
                         className="text-[#e9333f] border-[#e9333f] hover:bg-[#e9333f] hover:text-white"
                       >
                         Update Status
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setQuantityEquipment(equipment);
+                          setNewTotalQty(equipment.totalQuantity);
+                        }}
+                        className="text-blue-600 border-blue-300 hover:bg-blue-600 hover:text-white"
+                      >
+                        <Package size={13} className="mr-1" />
+                        Qty
                       </Button>
                       <Button
                         size="sm"
